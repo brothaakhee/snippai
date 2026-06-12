@@ -1,0 +1,14 @@
+# Python (spike tooling only)
+.venv/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Xcode / Swift (for the upcoming app)
+*.xcuserstate
+xcuserdata/
+DerivedData/
+.build/
+build/
