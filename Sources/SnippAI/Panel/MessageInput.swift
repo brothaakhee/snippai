@@ -11,6 +11,9 @@ struct MessageInput: NSViewRepresentable {
     var onCancel: () -> Void = {}
     var onFocusChange: (Bool) -> Void = { _ in }
     var focusOnAppear: Bool = true
+    // The text the user authors must scale with Dynamic Type too (NSTextView
+    // doesn't read SwiftUI's environment), matching the placeholder above it.
+    @ScaledMetric(relativeTo: .body) private var fontSize: CGFloat = 13
 
     func makeNSView(context: Context) -> NSScrollView {
         let textView = SubmitTextView()
@@ -19,7 +22,7 @@ struct MessageInput: NSViewRepresentable {
         textView.onCancel = onCancel
         textView.onFocusChange = onFocusChange
         textView.string = text
-        textView.font = .systemFont(ofSize: 13)
+        textView.font = .systemFont(ofSize: fontSize)
         textView.drawsBackground = false
         textView.isRichText = false
         textView.allowsUndo = true
@@ -47,6 +50,7 @@ struct MessageInput: NSViewRepresentable {
         textView.onSubmit = onSubmit
         textView.onCancel = onCancel
         textView.onFocusChange = onFocusChange
+        if textView.font?.pointSize != fontSize { textView.font = .systemFont(ofSize: fontSize) }
         if textView.string != text { textView.string = text }
     }
 

@@ -5,7 +5,8 @@ import SnippAIKit
 /// ANSI colors, bold/italic/underline, and a block cursor.
 struct TerminalMirrorView: View {
     let screen: TerminalScreen
-    var fontSize: CGFloat = 12
+    // Scales with Dynamic Type so low-vision users can read the mirror too.
+    @ScaledMetric(relativeTo: .body) private var fontSize: CGFloat = 12
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var font: Font { .system(size: fontSize, weight: .regular, design: .monospaced) }

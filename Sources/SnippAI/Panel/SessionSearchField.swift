@@ -16,12 +16,14 @@ struct SessionSearchField: NSViewRepresentable {
     var onSubmit: () -> Void = {}
     /// Called when Esc is pressed on an already-empty field.
     var onCancelEmpty: () -> Void = {}
+    @ScaledMetric(relativeTo: .body) private var fontSize: CGFloat = 13
 
     func makeNSView(context: Context) -> NSSearchField {
         let field = NSSearchField()
         field.placeholderString = "Search sessions…"
         field.delegate = context.coordinator
         field.focusRingType = .none
+        field.font = .systemFont(ofSize: fontSize)
         field.bezelStyle = .roundedBezel
         field.sendsSearchStringImmediately = true
         field.sendsWholeSearchString = false
@@ -32,6 +34,7 @@ struct SessionSearchField: NSViewRepresentable {
 
     func updateNSView(_ field: NSSearchField, context: Context) {
         context.coordinator.parent = self
+        if field.font?.pointSize != fontSize { field.font = .systemFont(ofSize: fontSize) }
         if field.stringValue != text { field.stringValue = text }
         // Re-focus exactly once per presentation (token change).
         if context.coordinator.lastFocusToken != focusToken {

@@ -23,6 +23,7 @@ struct OnboardingView: View {
         }
         .frame(width: 460)
         .background(.regularMaterial)
+        .snippaiDynamicTypeClamp()
     }
 
     // MARK: Header
@@ -30,13 +31,13 @@ struct OnboardingView: View {
     private var header: some View {
         HStack(spacing: 12) {
             Image(systemName: "camera.viewfinder")
-                .font(.system(size: 26, weight: .medium))
+                .scaledFont(26, weight: .medium)
                 .foregroundStyle(Color.accentColor)
                 .frame(width: 40)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Set up SnippAI").font(.system(size: 17, weight: .semibold))
+                Text("Set up SnippAI").scaledFont(17, weight: .semibold)
                 Text("Grant screen capture and connect iTerm2 — about a minute.")
-                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                    .scaledFont(12).foregroundStyle(.secondary)
             }
             Spacer()
         }
@@ -47,7 +48,7 @@ struct OnboardingView: View {
 
     private func sectionLabel(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 11, weight: .semibold))
+            .scaledFont(11, weight: .semibold)
             .foregroundStyle(.secondary)
             .padding(.top, 6).padding(.leading, 2)
     }
@@ -112,13 +113,13 @@ struct OnboardingView: View {
         HStack {
             if model.snapshot.allReady {
                 Label("All set — press ⌥⌘4 anywhere to capture.", systemImage: "checkmark.circle.fill")
-                    .font(.system(size: 12)).foregroundStyle(.green)
+                    .scaledFont(12).foregroundStyle(.green)
             } else {
                 Button("Re-check", action: model.refresh)
                     .controlSize(.small)
                     .keyboardShortcut(.defaultAction)   // Return re-checks, never dismisses mid-setup
                 Text("Updates as you grant each item.")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .scaledFont(11).foregroundStyle(.secondary)
             }
             Spacer()
             Button(model.snapshot.allReady ? "Done" : "Close", action: onDone)
@@ -139,6 +140,7 @@ private struct PermissionRow: View {
     let action: () -> Void
     var busy = false
     var enabled = true
+    @ScaledMetric(relativeTo: .body) private var iconWidth: CGFloat = 22
 
     /// What to show as the row's secondary line: the "do X first" reason when the
     /// row is gated, otherwise its normal detail.
@@ -158,13 +160,13 @@ private struct PermissionRow: View {
     private var content: some View {
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 15))
+                .scaledFont(15)
                 .foregroundStyle(.secondary)
-                .frame(width: 22)
+                .frame(width: iconWidth)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 13, weight: .semibold))
+                Text(title).scaledFont(13, weight: .semibold)
                 Text(effectiveDetail)
-                    .font(.system(size: 11))
+                    .scaledFont(11)
                     .foregroundStyle(detailIsError ? Color.orange : .secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -194,7 +196,7 @@ private struct PermissionRow: View {
                 Image(systemName: "circle").foregroundStyle(.secondary)
             }
         }
-        .font(.system(size: 16))
+        .scaledFont(16)
         .accessibilityHidden(true)
     }
 

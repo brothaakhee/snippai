@@ -7,6 +7,7 @@ struct SessionPickerView: View {
     @Bindable var model: AppModel
     var onCancel: () -> Void = {}
     @State private var scrollProxy: ScrollViewProxy?
+    @ScaledMetric(relativeTo: .body) private var searchHeight: CGFloat = 24
 
     var body: some View {
         VStack(spacing: 0) {
@@ -50,7 +51,7 @@ struct SessionPickerView: View {
                 onSubmit: { model.confirmSelection() },
                 onCancelEmpty: onCancel
             )
-            .frame(height: 24)
+            .frame(height: searchHeight)
             if !model.pickerQuery.isEmpty {
                 Text("\(model.filteredSessions.count) of \(model.sessions.count)")
                     .font(.caption).foregroundStyle(.tertiary)
@@ -133,6 +134,7 @@ private struct SessionRow: View {
     let isSelected: Bool
     let action: () -> Void
     @State private var hovering = false
+    @ScaledMetric(relativeTo: .body) private var iconWidth: CGFloat = 18
 
     private var tokens: [String] { query.lowercased().split(separator: " ").map(String.init) }
 
@@ -150,34 +152,34 @@ private struct SessionRow: View {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: session.looksLikeAgent ? "sparkles" : "terminal")
                     .foregroundStyle(session.looksLikeAgent ? Color.accentColor : .secondary)
-                    .font(.system(size: 14))
-                    .frame(width: 18)
+                    .scaledFont(14)
+                    .frame(width: iconWidth)
                     .padding(.top, 1)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(SessionRow.highlight(session.folderName, tokens: tokens))
-                            .font(.system(size: 13, weight: .semibold))
+                            .scaledFont(13, weight: .semibold)
                             .foregroundStyle(.primary)
                         if session.looksLikeAgent {
                             Text(session.jobName)
-                                .font(.system(size: 10, weight: .medium))
+                                .scaledFont(10, weight: .medium)
                                 .padding(.horizontal, 5).padding(.vertical, 1)
                                 .background(Color.accentColor.opacity(0.18), in: Capsule())
                                 .foregroundStyle(Color.accentColor)
                         }
                     }
                     Text(session.disambiguator)
-                        .font(.system(size: 11))
+                        .scaledFont(11)
                         .foregroundStyle(.secondary)
                         .padding(.top, 1)
                     if matchedOutsideFolder {
                         Text(SessionRow.highlight(abbreviatedPath, tokens: tokens))
-                            .font(.system(size: 11, design: .monospaced))
+                            .scaledFont(11, design: .monospaced)
                             .foregroundStyle(.secondary)
                             .lineLimit(1).truncationMode(.head)
                     } else if !session.lastLine.isEmpty {
                         Text(session.lastLine)
-                            .font(.system(size: 11, design: .monospaced))
+                            .scaledFont(11, design: .monospaced)
                             .foregroundStyle(.secondary.opacity(0.8))
                             .lineLimit(1)
                             .truncationMode(.tail)
@@ -250,7 +252,7 @@ struct ConnectionErrorView: View {
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 28)).foregroundStyle(.orange)
+                .scaledFont(28).foregroundStyle(.orange)
             Text("Can't reach iTerm2").font(.headline)
             Text(message)
                 .font(.callout).foregroundStyle(.secondary)

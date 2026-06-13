@@ -32,6 +32,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         window.isMovableByWindowBackground = true
         window.delegate = self
         window.center()
+        clampToScreen(window)
         self.window = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -46,6 +47,18 @@ final class OnboardingController: NSObject, NSWindowDelegate {
 
     func close() {
         window?.close()
+    }
+
+    /// Keeps the (content-sized) window within the visible screen so larger
+    /// Dynamic Type can't push the footer/buttons off-screen.
+    private func clampToScreen(_ window: NSWindow) {
+        guard let visible = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
+        var frame = window.frame
+        frame.size.height = min(frame.height, visible.height)
+        frame.size.width = min(frame.width, visible.width)
+        frame.origin.x = min(max(frame.minX, visible.minX), visible.maxX - frame.width)
+        frame.origin.y = min(max(frame.minY, visible.minY), visible.maxY - frame.height)
+        window.setFrame(frame, display: true)
     }
 
     func windowWillClose(_ notification: Notification) {

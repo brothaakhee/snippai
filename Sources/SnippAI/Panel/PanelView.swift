@@ -23,6 +23,7 @@ struct PanelView: View {
         .background(background)
         .clipShape(RoundedRectangle(cornerRadius: PanelStyle.panelRadius))
         .overlay(RoundedRectangle(cornerRadius: PanelStyle.panelRadius).strokeBorder(.white.opacity(0.08), lineWidth: 1))
+        .snippaiDynamicTypeClamp()
     }
 
     // .regularMaterial reads better than ultraThin over busy desktops; honor
@@ -61,20 +62,20 @@ private struct TitleBar: View {
                     .accessibilityLabel("Captured screenshot")
             } else {
                 Image(systemName: "camera.viewfinder")
-                    .font(.system(size: 18))
+                    .scaledFont(18)
                     .foregroundStyle(.secondary)
                     .frame(width: 40, height: 28)
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text("SnippAI").font(.system(size: 14, weight: .semibold))
+                Text("SnippAI").scaledFont(14, weight: .semibold)
                 Text(subtitle)
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .scaledFont(11).foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             Spacer()
             Button(action: onClose) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
+                    .scaledFont(11, weight: .bold)
                     .foregroundStyle(.secondary)
                     .frame(width: 28, height: 28)
                     .background(Color.primary.opacity(0.08), in: Circle())
@@ -93,6 +94,10 @@ private struct ComposeView: View {
     @Bindable var model: AppModel
     @State private var inputFocused = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    // Scale the input box + send button with Dynamic Type so larger text doesn't crowd.
+    @ScaledMetric(relativeTo: .body) private var inputMinHeight: CGFloat = 36
+    @ScaledMetric(relativeTo: .body) private var inputMaxHeight: CGFloat = 96
+    @ScaledMetric(relativeTo: .body) private var sendSize: CGFloat = 32
 
     var body: some View {
         VStack(spacing: 0) {
@@ -118,18 +123,18 @@ private struct ComposeView: View {
         HStack(spacing: 8) {
             Image(systemName: model.selectedSession?.looksLikeAgent == true ? "sparkles" : "terminal")
                 .foregroundStyle(model.selectedSession?.looksLikeAgent == true ? Color.accentColor : .secondary)
-                .font(.system(size: 12))
+                .scaledFont(12)
             VStack(alignment: .leading, spacing: 0) {
                 Text(model.selectedSession?.folderName ?? "session")
-                    .font(.system(size: 12, weight: .semibold))
+                    .scaledFont(12, weight: .semibold)
                 Text(model.selectedSession?.disambiguator ?? "")
-                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                    .scaledFont(10).foregroundStyle(.secondary)
             }
             // A live-mirror indicator so the terminal's liveness is legible.
             LiveDot()
             Spacer()
             Button("Change") { model.backToPicker() }
-                .font(.system(size: 11))
+                .scaledFont(11)
                 .buttonStyle(.borderless)
                 .accessibilityHint("Pick a different session")
         }
@@ -150,7 +155,7 @@ private struct ComposeView: View {
                     if model.messageText.isEmpty {
                         Text("Tell Claude what to do…")
                             .foregroundStyle(.tertiary)
-                            .font(.system(size: 13))
+                            .scaledFont(13)
                             .padding(.horizontal, 6).padding(.vertical, 8)
                             .allowsHitTesting(false)
                     }
@@ -159,7 +164,7 @@ private struct ComposeView: View {
                                  onFocusChange: { focused in
                                      withAnimation(.easeInOut(duration: 0.15)) { inputFocused = focused }
                                  })
-                        .frame(minHeight: 36, maxHeight: 96)
+                        .frame(minHeight: inputMinHeight, maxHeight: inputMaxHeight)
                         .fixedSize(horizontal: false, vertical: true)
                         // Only treat genuine user typing (non-empty) as dismissing
                         // the badge — not the programmatic clear that send() performs.
@@ -181,10 +186,10 @@ private struct ComposeView: View {
                             ProgressView().controlSize(.small)
                         } else {
                             Image(systemName: "arrow.up")
-                                .font(.system(size: 14, weight: .bold))
+                                .scaledFont(14, weight: .bold)
                         }
                     }
-                    .frame(width: 32, height: 32)
+                    .frame(width: sendSize, height: sendSize)
                     .background(canSend ? Color.accentColor : Color.primary.opacity(0.12), in: Circle())
                     .foregroundStyle(canSend ? .white : .secondary)
                     .shadow(color: .accentColor.opacity(canSend ? 0.3 : 0), radius: 4, y: 1)
@@ -212,7 +217,7 @@ private struct ComposeView: View {
         } else if inputFocused {
             // Training-wheels hint only while composing; the .help tooltip covers the rest.
             Text("Return to send · Shift+Return for a new line")
-                .font(.system(size: 10)).foregroundStyle(.secondary)
+                .scaledFont(10).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
