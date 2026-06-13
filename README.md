@@ -2,7 +2,7 @@
 
 A native macOS app that collapses *"screenshot → cmd-tab to your terminal → paste the image → type → enter"* into **one step on one screen**, wired directly into a running Claude Code session.
 
-> **Status:** Pre-POC. Core technical risk has been **verified end-to-end** (see [Verified](#verified-the-tunnel-is-real)). No app code yet — next step is the POC build.
+> **Status:** **POC built and verified end-to-end.** A native Swift menu-bar app (SwiftPM, AppKit + SwiftUI) captures a screen region, lists live iTerm2 sessions with rich labels, mirrors the chosen session's screen, and sends `message + screenshot path` straight into it. The native iTerm tunnel, the ScreenCaptureKit capture, the crosshair overlay, the session picker, and the live mirror are each verified working (screenshots below). Build it with `./scripts/build_app.sh`.
 
 ---
 
@@ -78,16 +78,37 @@ On a real machine the spike found **5 sessions sharing one working directory, 4 
 ---
 
 ## Open questions / decisions pending
-1. **iTerm client in the real app:** reimplement the protobuf/websocket protocol natively in Swift (clean, no runtime dependency, more work) vs. bundle a small Python helper using the proven `iterm2` lib (faster to ship, but ships a Python runtime inside a "native" app).
+1. ~~**iTerm client in the real app:** native Swift vs bundled Python.~~ **RESOLVED → native Swift, verified.** A native client (`Sources/SnippAIKit/ITerm/`) speaks the exact wire protocol — AppleScript cookie/key → WebSocket over iTerm2's **Unix domain socket** (`~/Library/Application Support/iTerm2/private/socket`) → SwiftProtobuf messages generated from a version-exact `proto/api.proto`. The Swift spike (`swift run iterm-spike`) is **ALL GREEN at 22ms round-trip** with **zero Python runtime** in the app. (Note: the protocol is served on the Unix socket, not TCP `:1912` as the reference lib's fallback URI implies; the native client connects to the socket directly.)
 2. **Picker labeling** design, given the multi-session finding above.
 3. **Claude Code desktop app** adapter viability — needs a hands-on Accessibility Inspector probe.
 
-## Next steps
-- [ ] Decide Swift-native vs bundled-Python for the iTerm client.
-- [ ] Build the capture + crosshair overlay (ScreenCaptureKit + `NSPanel`).
-- [ ] Build the panel: session picker + terminal mirror + input.
-- [ ] Wire the iTerm adapter (enumerate / send / stream) into the panel.
-- [ ] Write the phased POC plan with milestones.
+## What's built (POC)
+
+A native Swift app, no Python runtime. `SnippAIKit` is the engine (iTerm client + protocol + models); `SnippAI` is the menu-bar app.
+
+- **Native iTerm2 client** — AppleScript cookie/key → hand-rolled WebSocket (RFC 6455) over iTerm2's Unix domain socket → SwiftProtobuf messages generated from a version-exact `proto/api.proto`. Enumerate / send / stream / variables / activate. (`Sources/SnippAIKit/ITerm/`)
+- **Capture** — Carbon global hotkey (default ⌥⌘4, no Accessibility needed) → full-screen crosshair overlay (dim + clear selection hole + live dimension badge) → ScreenCaptureKit region capture → PNG. Multi-display + retina aware. (`Sources/SnippAI/Capture/`)
+- **Panel** (SwiftUI in a floating `NSPanel`) — screenshot header, **session picker** with rich disambiguating labels (folder · job · window/tab/pane · last on-screen line, agent sessions badged), a **live terminal mirror** that renders the session's emulated cells with ANSI colors + the cursor, and a message input. (`Sources/SnippAI/Panel/`)
+- **Adapter abstraction** — `TargetAdapter` protocol (iTerm2 is the first impl) so Terminal.app / Claude desktop / hosted-PTY adapters slot in later.
+
+### Build & run the app
+```bash
+./scripts/build_app.sh            # assembles + ad-hoc signs build/SnippAI.app
+open build/SnippAI.app            # menu-bar icon appears; press ⌥⌘4 to capture
+```
+First run prompts for **Screen Recording** (capture) and **Automation → iTerm2** (the tunnel). iTerm2's Python API must be enabled once: Settings → General → Magic → "Enable Python API".
+
+### Verifying without the GUI
+```bash
+swift run iterm-spike              # native enumerate/send/stream against live iTerm, ALL GREEN ~22ms
+swift test                         # unit tests: RFC 6455 frame decoder + terminal-screen parser
+```
+
+## Remaining / next steps
+- [ ] Hotkey rebinding UI + onboarding for the two TCC grants.
+- [ ] Picker live screen-preview thumbnails (current labels already disambiguate).
+- [ ] Terminal.app + Claude-desktop adapters (Accessibility probe for the latter).
+- [ ] v2 "host model" (own the PTY) → enables the native-chat Flavor B.
 
 ---
 
@@ -95,12 +116,7 @@ On a real machine the spike found **5 sessions sharing one working directory, 4 
 | Path | What |
 |---|---|
 | `README.md` | This document — current state, decisions, and verification. |
-| `spike_iterm.py` | The de-risking spike: proves enumerate / send / stream against a live iTerm. Safe — it only reads existing sessions and runs its send/stream test in a throwaway window it closes afterward. |
-
-### Running the spike
-```bash
-python3 -m venv .venv
-.venv/bin/pip install iterm2
-# Enable iTerm2's Python API: Settings → General → Magic → "Enable Python API"
-.venv/bin/python spike_iterm.py    # approve the one-time Allow dialog
-```
+| `Package.swift`, `Sources/` | The native app: `SnippAIKit` (engine) + `SnippAI` (menu-bar app) + `iterm-spike` (native tunnel spike/diagnostic). |
+| `proto/api.proto` | Version-exact iTerm2 API schema, reconstructed offline from the installed `iterm2` lib by `tools/extract_proto.py`. |
+| `scripts/build_app.sh` | Assembles and ad-hoc-signs `SnippAI.app`. |
+| `spike_iterm.py` | The original Python de-risking spike (kept for reference). Safe — reads existing sessions; runs its send/stream test in a throwaway window it closes. |

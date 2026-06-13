@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.snippai.app</string>
+    <key>CFBundleName</key>
+    <string>SnippAI</string>
+    <key>CFBundleDisplayName</key>
+    <string>SnippAI</string>
+    <key>CFBundleExecutable</key>
+    <string>SnippAI</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <!-- Menu-bar app: no dock icon, no main window. -->
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <!-- SnippAI talks to iTerm2 via the scripting API (AppleScript cookie handshake). -->
+    <key>NSAppleEventsUsageDescription</key>
+    <string>SnippAI connects to your iTerm2 session to send screenshots and messages to Claude.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>SnippAI captures the region you select so you can send it to Claude.</string>
+</dict>
+</plist>

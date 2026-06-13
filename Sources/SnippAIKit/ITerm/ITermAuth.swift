@@ -1,0 +1,108 @@
+import Foundation
+
+/// Errors surfaced while obtaining iTerm2 API credentials.
+public enum ITermAuthError: Error, LocalizedError {
+    case notRunning
+    case apiDisabled
+    case denied(String)
+    case malformedResponse(String)
+    case appleScriptFailed(code: Int, message: String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .notRunning:
+            return "iTerm2 is not running."
+        case .apiDisabled:
+            return "iTerm2's Python API is disabled. Enable it in Settings → General → Magic → \"Enable Python API\"."
+        case .denied(let reason):
+            return "iTerm2 denied API access: \(reason)"
+        case .malformedResponse(let raw):
+            return "iTerm2 returned an unexpected authentication response: \(raw)"
+        case .appleScriptFailed(let code, let message):
+            return "AppleScript authentication failed (\(code)): \(message)"
+        }
+    }
+}
+
+/// A short-lived credential pair used to authenticate the WebSocket handshake.
+public struct ITermCredentials: Sendable {
+    public let cookie: String
+    public let key: String
+}
+
+/// Obtains the iTerm2 API cookie + key.
+///
+/// Mirrors the reference Python client: it runs the AppleScript
+/// `request cookie and key` command, which triggers iTerm2's one-time "Allow"
+/// dialog on first use and returns a `"COOKIE KEY"` pair thereafter. Honours the
+/// `ITERM2_COOKIE` / `ITERM2_KEY` environment variables when present (matching the
+/// reference client) so the app can run inside an already-authorised context.
+public enum ITermAuth {
+    public static let advisoryName = "SnippAI"
+
+    public static func obtain() throws -> ITermCredentials {
+        if let cookie = ProcessInfo.processInfo.environment["ITERM2_COOKIE"],
+           let key = ProcessInfo.processInfo.environment["ITERM2_KEY"] {
+            return ITermCredentials(cookie: cookie, key: key)
+        }
+        // First confirm iTerm2 is actually running so we can give a precise error
+        // instead of AppleScript silently launching it.
+        guard isITermRunning() else { throw ITermAuthError.notRunning }
+
+        let script = "tell application \"iTerm2\" to request cookie and key for app named \"\(advisoryName)\""
+        let raw = try runAppleScript(script)
+        let parts = raw.split(separator: " ", maxSplits: 1).map(String.init)
+        guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else {
+            throw ITermAuthError.malformedResponse(raw)
+        }
+        return ITermCredentials(cookie: parts[0], key: parts[1])
+    }
+
+    static func isITermRunning() -> Bool {
+        let script = "if application \"iTerm2\" is running then\nreturn \"yes\"\nelse\nreturn \"no\"\nend if"
+        return (try? runAppleScript(script)) == "yes"
+    }
+
+    /// Runs an AppleScript via the `osascript` CLI and returns the trimmed output.
+    ///
+    /// We deliberately shell out rather than use `NSAppleScript`: `NSAppleScript`
+    /// must run on the main thread, but auth is invoked from the `ITermClient`
+    /// actor's executor, where an off-main call can deadlock. Shelling out (as the
+    /// reference Python client does) is thread-safe and deterministic.
+    static func runAppleScript(_ source: String) throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-"]   // read the script from stdin
+        let stdinPipe = Pipe(), stdoutPipe = Pipe(), stderrPipe = Pipe()
+        process.standardInput = stdinPipe
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        do {
+            try process.run()
+        } catch {
+            throw ITermAuthError.appleScriptFailed(code: -1, message: "could not launch osascript: \(error)")
+        }
+        stdinPipe.fileHandleForWriting.write(Data(source.utf8))
+        stdinPipe.fileHandleForWriting.closeFile()
+        let outData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+        let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        if process.terminationStatus != 0 {
+            let stderr = String(data: errData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let code = parseErrorCode(stderr)
+            // -2740/-2741 are the documented "iTerm2 too old" / disabled-API codes.
+            if code == -2740 || code == -2741 { throw ITermAuthError.apiDisabled }
+            throw ITermAuthError.appleScriptFailed(code: code ?? Int(process.terminationStatus), message: stderr)
+        }
+        return (String(data: outData, encoding: .utf8) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Extracts the trailing AppleScript error code, e.g. "… (-2741)".
+    private static func parseErrorCode(_ stderr: String) -> Int? {
+        guard let open = stderr.lastIndex(of: "("), stderr.hasSuffix(")") else { return nil }
+        let inside = stderr[stderr.index(after: open)..<stderr.index(before: stderr.endIndex)]
+        return Int(inside)
+    }
+}
