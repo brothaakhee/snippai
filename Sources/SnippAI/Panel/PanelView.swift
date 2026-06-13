@@ -6,6 +6,7 @@ import SnippAIKit
 struct PanelView: View {
     @Bindable var model: AppModel
     var onClose: () -> Void
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,9 +20,19 @@ struct PanelView: View {
             }
         }
         .frame(width: 420, height: 560)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(0.08), lineWidth: 1))
+        .background(background)
+        .clipShape(RoundedRectangle(cornerRadius: PanelStyle.panelRadius))
+        .overlay(RoundedRectangle(cornerRadius: PanelStyle.panelRadius).strokeBorder(.white.opacity(0.08), lineWidth: 1))
+    }
+
+    // .regularMaterial reads better than ultraThin over busy desktops; honor
+    // Reduce Transparency with a solid surface.
+    @ViewBuilder private var background: some View {
+        if reduceTransparency {
+            Color(nsColor: .windowBackgroundColor)
+        } else {
+            Color.clear.background(.regularMaterial)
+        }
     }
 }
 
@@ -45,8 +56,9 @@ private struct TitleBar: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 40, height: 28)
-                    .clipShape(RoundedRectangle(cornerRadius: 5))
-                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.white.opacity(0.12)))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.15)))
+                    .accessibilityLabel("Captured screenshot")
             } else {
                 Image(systemName: "camera.viewfinder")
                     .font(.system(size: 18))
@@ -54,7 +66,7 @@ private struct TitleBar: View {
                     .frame(width: 40, height: 28)
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text("SnippAI").font(.system(size: 13, weight: .semibold))
+                Text("SnippAI").font(.system(size: 14, weight: .semibold))
                 Text(subtitle)
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -64,13 +76,15 @@ private struct TitleBar: View {
                 Image(systemName: "xmark")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 22)
+                    .frame(width: 28, height: 28)
                     .background(Color.primary.opacity(0.08), in: Circle())
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
             .keyboardShortcut(.cancelAction)
+            .accessibilityLabel("Close SnippAI")
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, PanelStyle.contentInset)
         .padding(.vertical, 10)
     }
 }
@@ -78,36 +92,50 @@ private struct TitleBar: View {
 private struct ComposeView: View {
     @Bindable var model: AppModel
     @State private var inputFocused = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
             targetBar
-            Divider().opacity(0.4)
+            // The mirror is an inset, rounded "screen" rather than a full-bleed
+            // opaque slab butting against the material — no bracketing dividers.
             TerminalMirrorView(screen: model.screen)
+                .clipShape(RoundedRectangle(cornerRadius: PanelStyle.controlRadius))
+                .overlay(RoundedRectangle(cornerRadius: PanelStyle.controlRadius)
+                    .strokeBorder(.white.opacity(0.06), lineWidth: 1))
+                .padding(.horizontal, PanelStyle.contentInset)
+                .padding(.vertical, 8)
                 .frame(maxHeight: .infinity)
-            Divider().opacity(0.4)
-            inputBar
         }
         // Escape backs out to the session picker rather than dismissing everything.
         .onExitCommand { model.backToPicker() }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) { Divider().opacity(0.4); inputBar }
+        }
     }
 
     private var targetBar: some View {
         HStack(spacing: 8) {
             Image(systemName: model.selectedSession?.looksLikeAgent == true ? "sparkles" : "terminal")
-                .foregroundStyle(.secondary).font(.system(size: 12))
+                .foregroundStyle(model.selectedSession?.looksLikeAgent == true ? Color.accentColor : .secondary)
+                .font(.system(size: 12))
             VStack(alignment: .leading, spacing: 0) {
                 Text(model.selectedSession?.folderName ?? "session")
                     .font(.system(size: 12, weight: .semibold))
                 Text(model.selectedSession?.disambiguator ?? "")
                     .font(.system(size: 10)).foregroundStyle(.secondary)
             }
+            // A live-mirror indicator so the terminal's liveness is legible.
+            LiveDot()
             Spacer()
             Button("Change") { model.backToPicker() }
                 .font(.system(size: 11))
                 .buttonStyle(.borderless)
+                .accessibilityHint("Pick a different session")
         }
-        .padding(.horizontal, 14).padding(.vertical, 8)
+        .padding(.horizontal, PanelStyle.contentInset).padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Sending to \(model.selectedSession?.folderName ?? "session"), live")
     }
 
     private var inputBar: some View {
@@ -141,9 +169,9 @@ private struct ComposeView: View {
                 }
                 .padding(4)
                 .background(Color.primary.opacity(inputFocused ? 0.09 : 0.06),
-                            in: RoundedRectangle(cornerRadius: 9))
+                            in: RoundedRectangle(cornerRadius: PanelStyle.controlRadius))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 9)
+                    RoundedRectangle(cornerRadius: PanelStyle.controlRadius)
                         .strokeBorder(Color.accentColor.opacity(inputFocused ? 0.55 : 0), lineWidth: 1.5)
                 )
 
@@ -159,16 +187,18 @@ private struct ComposeView: View {
                     .frame(width: 32, height: 32)
                     .background(canSend ? Color.accentColor : Color.primary.opacity(0.12), in: Circle())
                     .foregroundStyle(canSend ? .white : .secondary)
-                    .animation(.easeInOut(duration: 0.15), value: canSend)
+                    .shadow(color: .accentColor.opacity(canSend ? 0.3 : 0), radius: 4, y: 1)
+                    .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: canSend)
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
                 .keyboardShortcut(.return, modifiers: .command)
                 .help("Send (Return) · Shift+Return for a new line")
+                .accessibilityLabel(model.isSending ? "Sending" : "Send message")
             }
             footer
         }
-        .padding(.horizontal, 14).padding(.vertical, 10)
+        .padding(.horizontal, PanelStyle.contentInset).padding(.vertical, 10)
     }
 
     @ViewBuilder
@@ -178,9 +208,11 @@ private struct ComposeView: View {
                 .font(.caption).foregroundStyle(.green)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .transition(.opacity)
-        } else {
+                .accessibilityAddTraits(.updatesFrequently)
+        } else if inputFocused {
+            // Training-wheels hint only while composing; the .help tooltip covers the rest.
             Text("Return to send · Shift+Return for a new line")
-                .font(.system(size: 10)).foregroundStyle(.tertiary)
+                .font(.system(size: 10)).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -192,5 +224,21 @@ private struct ComposeView: View {
     private func send() {
         guard canSend else { return }
         Task { await model.send() }
+    }
+}
+
+/// A small green "live" dot that gently pulses, signaling the mirror is live.
+private struct LiveDot: View {
+    @State private var on = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Circle()
+            .fill(.green)
+            .frame(width: 6, height: 6)
+            .opacity(reduceMotion ? 1 : (on ? 1 : 0.35))
+            .animation(reduceMotion ? nil : .easeInOut(duration: 1).repeatForever(autoreverses: true), value: on)
+            .onAppear { on = true }
+            .accessibilityHidden(true)
     }
 }

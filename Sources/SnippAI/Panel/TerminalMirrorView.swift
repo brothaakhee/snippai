@@ -6,6 +6,7 @@ import SnippAIKit
 struct TerminalMirrorView: View {
     let screen: TerminalScreen
     var fontSize: CGFloat = 12
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var font: Font { .system(size: fontSize, weight: .regular, design: .monospaced) }
 
@@ -14,10 +15,12 @@ struct TerminalMirrorView: View {
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 0) {
                     if screen.lines.isEmpty {
-                        Text("Waiting for screen…")
-                            .font(font)
-                            .foregroundStyle(.secondary)
-                            .padding(8)
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("Connecting to session…").font(font)
+                        }
+                        .foregroundStyle(.secondary)
+                        .padding(12)
                     } else {
                         ForEach(Array(screen.lines.enumerated()), id: \.offset) { index, line in
                             lineView(line, row: index)
@@ -36,12 +39,20 @@ struct TerminalMirrorView: View {
             .onChange(of: screen) { scrollToActive(proxy) }
             .onAppear { scrollToActive(proxy) }
         }
+        // Expose the mirror as one labeled, value-bearing element for VoiceOver.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Live terminal mirror")
+        .accessibilityValue(screen.lastNonEmptyLine ?? "Connecting")
     }
 
     private func scrollToActive(_ proxy: ScrollViewProxy) {
         let target = screen.cursor?.y ?? screen.lines.indices.last
         guard let target else { return }
-        withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(target, anchor: .bottom) }
+        if reduceMotion {
+            proxy.scrollTo(target, anchor: .bottom)
+        } else {
+            withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(target, anchor: .bottom) }
+        }
     }
 
     @ViewBuilder

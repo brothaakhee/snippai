@@ -123,11 +123,15 @@ private final class SelectionView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        // Dim the whole screen.
-        NSColor.black.withAlphaComponent(0.28).setFill()
+        // Dim the whole screen so the selection clearly pops.
+        NSColor.black.withAlphaComponent(0.40).setFill()
         bounds.fill()
 
-        guard currentRect.width > 0, currentRect.height > 0 else { return }
+        // Before any drag, show a centered instruction so the controls are discoverable.
+        if currentRect.width <= 0 || currentRect.height <= 0 {
+            drawCenteredHint("Drag to select an area  ·  Esc to cancel")
+            return
+        }
 
         // Punch a clear hole for the selection so the user sees true pixels.
         if let ctx = NSGraphicsContext.current {
@@ -137,14 +141,13 @@ private final class SelectionView: NSView {
             ctx.compositingOperation = .sourceOver
         }
 
-        // Selection border.
-        let accent = NSColor.controlAccentColor
-        accent.setStroke()
+        // Selection border (accent is reserved for this — not the badge).
+        NSColor.controlAccentColor.setStroke()
         let border = NSBezierPath(rect: currentRect.insetBy(dx: 0.5, dy: 0.5))
         border.lineWidth = 1.5
         border.stroke()
 
-        // Dimension badge.
+        // Dimension chip: neutral dark, centered under the selection.
         let label = "\(Int(currentRect.width)) × \(Int(currentRect.height))"
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold),
@@ -152,14 +155,34 @@ private final class SelectionView: NSView {
         ]
         let size = label.size(withAttributes: attrs)
         let padding: CGFloat = 6
-        var badgeRect = NSRect(x: currentRect.minX,
-                               y: currentRect.maxY + 6,
+        var badgeRect = NSRect(x: currentRect.midX - (size.width + padding * 2) / 2,
+                               y: currentRect.minY - size.height - padding - 8,
                                width: size.width + padding * 2,
                                height: size.height + padding)
-        if badgeRect.maxY > bounds.maxY { badgeRect.origin.y = currentRect.minY - badgeRect.height - 6 }
-        let badge = NSBezierPath(roundedRect: badgeRect, xRadius: 5, yRadius: 5)
-        accent.withAlphaComponent(0.95).setFill()
-        badge.fill()
+        if badgeRect.minY < bounds.minY { badgeRect.origin.y = currentRect.maxY + 8 }
+        drawChip(badgeRect)
         label.draw(at: NSPoint(x: badgeRect.minX + padding, y: badgeRect.minY + padding / 2), withAttributes: attrs)
+    }
+
+    private func drawChip(_ rect: NSRect) {
+        let chip = NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6)
+        NSColor(white: 0, alpha: 0.78).setFill()
+        chip.fill()
+        NSColor.white.withAlphaComponent(0.12).setStroke()
+        chip.stroke()
+    }
+
+    private func drawCenteredHint(_ text: String) {
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 13, weight: .medium),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.92),
+        ]
+        let size = text.size(withAttributes: attrs)
+        let pad: CGFloat = 12
+        let rect = NSRect(x: bounds.midX - (size.width + pad * 2) / 2,
+                          y: bounds.midY - (size.height + pad) / 2,
+                          width: size.width + pad * 2, height: size.height + pad)
+        drawChip(rect)
+        text.draw(at: NSPoint(x: rect.minX + pad, y: rect.minY + pad / 2), withAttributes: attrs)
     }
 }

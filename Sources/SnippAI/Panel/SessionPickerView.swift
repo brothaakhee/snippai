@@ -25,12 +25,16 @@ struct SessionPickerView: View {
             } label: {
                 Image(systemName: "arrow.clockwise")
                     .imageScale(.medium)
+                    .rotationEffect(.degrees(model.isLoadingSessions ? 360 : 0))
+                    .animation(model.isLoadingSessions ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default,
+                               value: model.isLoadingSessions)
             }
             .buttonStyle(.borderless)
             .help("Refresh sessions")
+            .accessibilityLabel("Refresh sessions")
             .disabled(model.isLoadingSessions)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, PanelStyle.contentInset)
         .padding(.vertical, 12)
     }
 
@@ -58,7 +62,7 @@ struct SessionPickerView: View {
                             .id(session.id)
                         }
                     }
-                    .padding(12)
+                    .padding(PanelStyle.contentInset - 4)
                 }
                 // Keyboard-first: arrows move the highlight, Return opens it.
                 .focusable()
@@ -109,10 +113,11 @@ private struct SessionRow: View {
                     Text(session.disambiguator)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
+                        .padding(.top, 1)
                     if !session.lastLine.isEmpty {
                         Text(session.lastLine)
                             .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.secondary.opacity(0.8))
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
@@ -121,18 +126,30 @@ private struct SessionRow: View {
             }
             .padding(10)
             .background(
-                RoundedRectangle(cornerRadius: 9)
+                RoundedRectangle(cornerRadius: PanelStyle.cardRadius)
                     .fill(isSelected ? Color.accentColor.opacity(0.16)
                           : (hovering ? Color.primary.opacity(0.06) : Color.clear))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 9)
+                RoundedRectangle(cornerRadius: PanelStyle.cardRadius)
                     .strokeBorder(isSelected ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 1)
             )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+        // One spoken element — agent status, not just color; selection as a trait.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(session.lastLine)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private var accessibilityLabel: String {
+        var parts = [session.folderName]
+        if session.looksLikeAgent { parts.append("AI agent, \(session.jobName)") }
+        parts.append(session.disambiguator)
+        return parts.joined(separator: ", ")
     }
 }
 
