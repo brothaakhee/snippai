@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let model = AppModel()
     private lazy var panelController = PanelController(model: model)
     private let captureController = CaptureController()
+    private let onboarding = OnboardingController()
     private var statusItem: NSStatusItem?
     private var hotKey: HotKey?
     private let combo = HotKey.KeyCombo.defaultCombo
@@ -24,6 +25,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             runCaptureSelfTest(spec)
             return
         }
+
+        // Debug: force the onboarding window open for inspection.
+        if ProcessInfo.processInfo.environment["SNIPPAI_SHOW_ONBOARDING"] == "1" {
+            onboarding.show()
+            return
+        }
+
+        // First-run: guide the two macOS permission gates before the first capture.
+        onboarding.showIfNeeded()
 
         // Debug: show the crosshair overlay so it can be screenshotted.
         if ProcessInfo.processInfo.environment["SNIPPAI_TEST_OVERLAY"] == "1" {
@@ -59,6 +69,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelItem.target = self
         menu.addItem(panelItem)
         menu.addItem(.separator())
+        let setupItem = NSMenuItem(title: "Setup…", action: #selector(menuSetup), keyEquivalent: "")
+        setupItem.target = self
+        menu.addItem(setupItem)
+        menu.addItem(.separator())
         let quitItem = NSMenuItem(title: "Quit SnippAI", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quitItem)
         item.menu = menu
@@ -66,6 +80,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func menuCapture() { beginCapture() }
+
+    @objc private func menuSetup() { onboarding.show() }
 
     @objc private func menuOpenPanel() {
         Task {
@@ -114,19 +130,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func presentError(_ error: Error) {
+        // A missing capture permission is exactly what onboarding exists to fix —
+        // send the user there instead of a dead-end alert.
+        if case CaptureError.permissionDenied = error {
+            onboarding.show()
+            return
+        }
         let alert = NSAlert()
         alert.messageText = "SnippAI couldn't capture"
         alert.informativeText = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         alert.alertStyle = .warning
-        if case CaptureError.permissionDenied = error {
-            alert.addButton(withTitle: "Open System Settings")
-            alert.addButton(withTitle: "Cancel")
-            if alert.runModal() == .alertFirstButtonReturn {
-                let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!
-                NSWorkspace.shared.open(url)
-            }
-        } else {
-            alert.runModal()
-        }
+        alert.runModal()
     }
 }

@@ -94,6 +94,10 @@ public enum ITermAuth {
             let code = parseErrorCode(stderr)
             // -2740/-2741 are the documented "iTerm2 too old" / disabled-API codes.
             if code == -2740 || code == -2741 { throw ITermAuthError.apiDisabled }
+            // -1743 is errAEEventNotPermitted: the user denied Automation control.
+            if code == -1743 {
+                throw ITermAuthError.denied("SnippAI isn’t allowed to control iTerm2. Enable it in System Settings → Privacy & Security → Automation.")
+            }
             throw ITermAuthError.appleScriptFailed(code: code ?? Int(process.terminationStatus), message: stderr)
         }
         return (String(data: outData, encoding: .utf8) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
