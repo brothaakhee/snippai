@@ -14,7 +14,7 @@ struct PanelView: View {
             Divider().opacity(0.5)
             switch model.phase {
             case .picking:
-                SessionPickerView(model: model)
+                SessionPickerView(model: model, onCancel: onClose)
             case .composing:
                 ComposeView(model: model)
             }

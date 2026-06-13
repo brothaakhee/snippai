@@ -15,6 +15,9 @@ final class AppModel {
     var phase: Phase = .picking
     var sessions: [TerminalSession] = []
     var selectedSessionID: String?
+    var pickerQuery: String = ""
+    /// Bumped each time the picker is (re)presented so the search field re-grabs focus.
+    var pickerFocusToken = 0
     var screenshotURL: URL?
     var screen: TerminalScreen = .empty
     var messageText: String = ""
@@ -36,24 +39,42 @@ final class AppModel {
         sessions.first { $0.id == selectedSessionID }
     }
 
+    /// Sessions matching the picker query — every whitespace-separated token must
+    /// appear somewhere in the session's searchable text (case-insensitive).
+    var filteredSessions: [TerminalSession] {
+        let tokens = pickerQuery.lowercased().split(separator: " ").map(String.init)
+        guard !tokens.isEmpty else { return sessions }
+        return sessions.filter { session in
+            let haystack = session.searchHaystack
+            return tokens.allSatisfy { haystack.contains($0) }
+        }
+    }
+
+    /// Keeps a valid highlight as the filtered set changes: if the current
+    /// selection dropped out of the results, jump to the first match.
+    func ensureSelectionInFilter() {
+        let results = filteredSessions
+        if !results.contains(where: { $0.id == selectedSessionID }) {
+            selectedSessionID = results.first?.id
+        }
+    }
+
     /// Called when a new screenshot arrives and the panel is shown.
     func beginSession(screenshot: URL?) async {
         screenshotURL = screenshot
         justSent = false
         messageText = ""
+        pickerQuery = ""
         connectionError = nil
-        await refreshSessions()
-        if ProcessInfo.processInfo.environment["SNIPPAI_FORCE_PICKER"] == "1" {
-            selectedSessionID = nil
-            phase = .picking
-            return
-        }
-        // If we already had a valid selection, jump straight to composing.
-        if let id = selectedSessionID, sessions.contains(where: { $0.id == id }) {
-            startComposing(sessionID: id)
+        await refreshSessions()   // sets selectedSessionID to an agent-preferred visible session
+        let forcePicker = ProcessInfo.processInfo.environment["SNIPPAI_FORCE_PICKER"] == "1"
+        // Auto-jump to composing only when the default target is an agent session;
+        // otherwise show the picker (with that default highlighted for keyboard use).
+        if !forcePicker, let session = selectedSession, session.looksLikeAgent {
+            startComposing(sessionID: session.id)
         } else {
-            selectedSessionID = nil
             phase = .picking
+            pickerFocusToken += 1
         }
     }
 
@@ -65,9 +86,12 @@ final class AppModel {
             let discovered = try await adapter.discover()
             sessions = discovered
             connectionError = nil
-            // Default selection: prefer an agent-looking session if none chosen.
-            if selectedSessionID == nil {
-                selectedSessionID = discovered.first(where: { $0.looksLikeAgent })?.id
+            // Default/repair selection against the CURRENT filter: prefer an agent
+            // session, else the first visible result. Also drops a stale selection
+            // (closed session, or filtered out after cwd/lastLine changed).
+            if !filteredSessions.contains(where: { $0.id == selectedSessionID }) {
+                selectedSessionID = filteredSessions.first(where: { $0.looksLikeAgent })?.id
+                    ?? filteredSessions.first?.id
             }
         } catch {
             connectionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -75,18 +99,20 @@ final class AppModel {
         }
     }
 
-    /// Moves the picker highlight up/down for keyboard navigation.
+    /// Moves the picker highlight up/down (over the filtered results).
     func moveSelection(by delta: Int) {
-        guard !sessions.isEmpty else { return }
-        let current = sessions.firstIndex { $0.id == selectedSessionID }
+        let results = filteredSessions
+        guard !results.isEmpty else { return }
+        let current = results.firstIndex { $0.id == selectedSessionID }
         let start = current ?? (delta > 0 ? -1 : 0)
-        let next = max(0, min(sessions.count - 1, start + delta))
-        selectedSessionID = sessions[next].id
+        let next = max(0, min(results.count - 1, start + delta))
+        selectedSessionID = results[next].id
     }
 
-    /// Confirms the current picker highlight (Return key).
+    /// Confirms the current highlight, or the first result if nothing is highlighted.
     func confirmSelection() {
-        if let id = selectedSessionID { choose(sessionID: id) }
+        let id = selectedSessionID ?? filteredSessions.first?.id
+        if let id, filteredSessions.contains(where: { $0.id == id }) { choose(sessionID: id) }
     }
 
     func choose(sessionID: String) {
@@ -100,10 +126,12 @@ final class AppModel {
         streamTask?.cancel()
         streamTask = nil
         streamGeneration += 1   // invalidate the cancelled stream's late writes
+        pickerQuery = ""
         justSent = false
         statusMessage = nil
         connectionError = nil
         phase = .picking
+        pickerFocusToken += 1
     }
 
     /// Clears the transient "Sent" confirmation (e.g. when the user starts typing again).

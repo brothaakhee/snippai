@@ -5,7 +5,8 @@ import SnippAIKit
 /// because multiple sessions routinely share one working directory.
 struct SessionPickerView: View {
     @Bindable var model: AppModel
-    @FocusState private var listFocused: Bool
+    var onCancel: () -> Void = {}
+    @State private var scrollProxy: ScrollViewProxy?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -35,7 +36,33 @@ struct SessionPickerView: View {
             .disabled(model.isLoadingSessions)
         }
         .padding(.horizontal, PanelStyle.contentInset)
-        .padding(.vertical, 12)
+        .padding(.top, 12).padding(.bottom, model.sessions.isEmpty ? 12 : 8)
+    }
+
+    @ViewBuilder
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            SessionSearchField(
+                text: $model.pickerQuery,
+                focusToken: model.pickerFocusToken,
+                onMoveUp: { model.moveSelection(by: -1); scrollToSelection(animated: true) },
+                onMoveDown: { model.moveSelection(by: 1); scrollToSelection(animated: true) },
+                onSubmit: { model.confirmSelection() },
+                onCancelEmpty: onCancel
+            )
+            .frame(height: 24)
+            if !model.pickerQuery.isEmpty {
+                Text("\(model.filteredSessions.count) of \(model.sessions.count)")
+                    .font(.caption).foregroundStyle(.tertiary)
+                    .monospacedDigit()
+            }
+        }
+        .padding(.horizontal, PanelStyle.contentInset)
+        .padding(.bottom, 8)
+        .onChange(of: model.pickerQuery) {
+            model.ensureSelectionInFilter()
+            scrollToSelection(animated: false)   // jump, not jitter, while typing
+        }
     }
 
     @ViewBuilder
@@ -52,11 +79,32 @@ struct SessionPickerView: View {
             ContentUnavailableView("No iTerm sessions", systemImage: "terminal",
                                    description: Text("Open a session in iTerm2 and refresh."))
         } else {
+            VStack(spacing: 0) {
+                if model.sessions.count > 1 { searchBar }   // filtering one item is pointless
+                resultsList
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var resultsList: some View {
+        let results = model.filteredSessions
+        if results.isEmpty {
+            ContentUnavailableView {
+                Label("No matching sessions", systemImage: "magnifyingglass")
+            } description: {
+                Text("No open iTerm2 session matches “\(model.pickerQuery)”.")
+            } actions: {
+                Button("Clear filter") { model.pickerQuery = "" }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 6) {
-                        ForEach(model.sessions) { session in
-                            SessionRow(session: session, isSelected: session.id == model.selectedSessionID) {
+                        ForEach(results) { session in
+                            SessionRow(session: session, query: model.pickerQuery,
+                                       isSelected: session.id == model.selectedSessionID) {
                                 model.choose(sessionID: session.id)
                             }
                             .id(session.id)
@@ -64,30 +112,38 @@ struct SessionPickerView: View {
                     }
                     .padding(PanelStyle.contentInset - 4)
                 }
-                // Keyboard-first: arrows move the highlight, Return opens it.
-                .focusable()
-                .focusEffectDisabled()
-                .focused($listFocused)
-                .onAppear { listFocused = true }
-                .onKeyPress(.downArrow) { model.moveSelection(by: 1); scroll(proxy); return .handled }
-                .onKeyPress(.upArrow) { model.moveSelection(by: -1); scroll(proxy); return .handled }
-                .onKeyPress(.return) { model.confirmSelection(); return .handled }
+                .onAppear { scrollProxy = proxy }
             }
         }
     }
 
-    private func scroll(_ proxy: ScrollViewProxy) {
-        if let id = model.selectedSessionID {
+    private func scrollToSelection(animated: Bool) {
+        guard let id = model.selectedSessionID, let proxy = scrollProxy else { return }
+        if animated {
             withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(id, anchor: .center) }
+        } else {
+            proxy.scrollTo(id, anchor: .center)
         }
     }
 }
 
 private struct SessionRow: View {
     let session: TerminalSession
+    var query: String = ""
     let isSelected: Bool
     let action: () -> Void
     @State private var hovering = false
+
+    private var tokens: [String] { query.lowercased().split(separator: " ").map(String.init) }
+
+    /// True when the query matched something outside the visible folder name
+    /// (e.g. the working-directory path) — we then surface that path so the row
+    /// doesn't look like an inexplicable result.
+    private var matchedOutsideFolder: Bool {
+        guard !tokens.isEmpty else { return false }
+        let folder = session.folderName.lowercased()
+        return !tokens.allSatisfy { folder.contains($0) }
+    }
 
     var body: some View {
         Button(action: action) {
@@ -99,7 +155,7 @@ private struct SessionRow: View {
                     .padding(.top, 1)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(session.folderName)
+                        Text(SessionRow.highlight(session.folderName, tokens: tokens))
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(.primary)
                         if session.looksLikeAgent {
@@ -114,7 +170,12 @@ private struct SessionRow: View {
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .padding(.top, 1)
-                    if !session.lastLine.isEmpty {
+                    if matchedOutsideFolder {
+                        Text(SessionRow.highlight(abbreviatedPath, tokens: tokens))
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1).truncationMode(.head)
+                    } else if !session.lastLine.isEmpty {
                         Text(session.lastLine)
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundStyle(.secondary.opacity(0.8))
@@ -143,6 +204,35 @@ private struct SessionRow: View {
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(session.lastLine)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private var abbreviatedPath: String {
+        (session.cwd as NSString).abbreviatingWithTildeInPath
+    }
+
+    /// Returns an attributed string with every occurrence of each token accented,
+    /// so the user can see exactly what matched (Spotlight/Raycast-style).
+    static func highlight(_ text: String, tokens: [String]) -> AttributedString {
+        var attr = AttributedString(text)
+        guard !tokens.isEmpty else { return attr }
+        let lower = Array(text.lowercased())
+        var marked = [Bool](repeating: false, count: lower.count)
+        for token in tokens where !token.isEmpty {
+            let t = Array(token)
+            guard t.count <= lower.count else { continue }
+            var i = 0
+            while i <= lower.count - t.count {
+                if Array(lower[i..<i + t.count]) == t {
+                    for j in i..<i + t.count { marked[j] = true }
+                    i += t.count
+                } else { i += 1 }
+            }
+        }
+        for (offset, index) in zip(0..., attr.characters.indices) where offset < marked.count && marked[offset] {
+            let next = attr.characters.index(after: index)
+            attr[index..<next].foregroundColor = .accentColor
+        }
+        return attr
     }
 
     private var accessibilityLabel: String {

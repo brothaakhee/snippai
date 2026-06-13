@@ -34,6 +34,11 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
         return name.isEmpty ? cwd : name
     }
 
+    /// Lowercased text the picker filters against (folder, job, title, path, last line).
+    public var searchHaystack: String {
+        [folderName, jobName, title, cwd, lastLine].joined(separator: " ").lowercased()
+    }
+
     /// True when the running job looks like an interactive AI/agent CLI — these
     /// are the sessions SnippAI most wants to target.
     public var looksLikeAgent: Bool {
