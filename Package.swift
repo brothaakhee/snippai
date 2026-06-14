@@ -20,6 +20,10 @@ let package = Package(
             name: "iterm-spike",
             dependencies: ["SnippAIKit"]
         ),
+        .executableTarget(
+            name: "terminal-spike",
+            dependencies: ["SnippAIKit"]
+        ),
         // The menu-bar app.
         .executableTarget(
             name: "SnippAI",

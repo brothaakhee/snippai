@@ -6,7 +6,7 @@ import SnippAIKit
 // with no Python runtime. Safe: only reads existing sessions; the send/stream
 // test runs in a throwaway window that is closed at the end.
 
-func line(_ s: String) { print(s); FileHandle.standardOutput.synchronizeFile() }
+func line(_ s: String) { print(s) }
 
 let token = "SNIPPAI_" + String((0..<8).map { _ in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".randomElement()! })
 let fakeShot = "/tmp/snippai_spike_shot.png"

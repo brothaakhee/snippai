@@ -75,6 +75,24 @@ public struct TerminalScreen: Equatable, Sendable {
     }
 }
 
+extension TerminalScreen {
+    /// Builds a screen from plain text (e.g. Terminal.app's AppleScript `contents`),
+    /// which carries no per-cell color/style or cursor — every cell uses the default
+    /// style. Trailing blank lines are trimmed so the mirror isn't mostly empty.
+    public static func plain(_ text: String) -> TerminalScreen {
+        var rawLines = text.replacingOccurrences(of: "\r", with: "").components(separatedBy: "\n")
+        while let last = rawLines.last, last.trimmingCharacters(in: .whitespaces).isEmpty {
+            rawLines.removeLast()
+        }
+        var columns = 0
+        let lines = rawLines.map { line -> TermLine in
+            columns = max(columns, line.count)
+            return TermLine(cells: line.map { TermCell(text: String($0), style: .default) })
+        }
+        return TerminalScreen(lines: lines, cursor: nil, columns: columns, rows: lines.count)
+    }
+}
+
 // MARK: - Parsing from the iTerm2 buffer response
 
 public enum TerminalScreenParser {

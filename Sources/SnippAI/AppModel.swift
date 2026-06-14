@@ -31,7 +31,7 @@ final class AppModel {
     private var streamTask: Task<Void, Never>?
     private var streamGeneration = 0
 
-    init(adapter: any TargetAdapter = ITermAdapter()) {
+    init(adapter: any TargetAdapter = AdapterRouter(adapters: [ITermAdapter(), TerminalAppAdapter()])) {
         self.adapter = adapter
     }
 
@@ -160,7 +160,8 @@ final class AppModel {
                 // Stream ended without an error → the connection dropped (e.g. iTerm
                 // restarted). Surface it instead of freezing on the last frame.
                 if let self, self.streamGeneration == generation {
-                    self.connectionError = "Connection to iTerm2 was lost. Choose the session again to reconnect."
+                    let app = self.selectedSession?.source ?? "the terminal"
+                    self.connectionError = "Connection to \(app) was lost. Choose the session again to reconnect."
                 }
             } catch {
                 if let self, self.streamGeneration == generation {
@@ -178,7 +179,10 @@ final class AppModel {
         isSending = true
         defer { isSending = false }
         do {
-            try await adapter.send(text: composed + "\n", toSession: sessionID)
+            // The adapter owns submission (iTerm appends a newline; Terminal's
+            // `do script` auto-submits). We pass a single-line message so it lands
+            // as ONE prompt, never fragmented into multiple submissions.
+            try await adapter.send(text: composed, toSession: sessionID)
             justSent = true
             messageText = ""
             statusMessage = "Sent to \(selectedSession?.folderName ?? "session")"
@@ -187,16 +191,19 @@ final class AppModel {
         }
     }
 
-    /// Builds the text injected into the session. The bare screenshot path lets
+    /// Builds the single-line text injected into the session. Kept to one line so a
+    /// live agent CLI receives it as one prompt (embedded newlines would submit
+    /// prematurely / run as separate commands). The bare screenshot path lets
     /// Claude's Read tool ingest the PNG without a native image attachment.
     static func composeMessage(text: String, screenshot: URL?) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\n", with: " ")
         guard let screenshot else { return trimmed }
         let path = screenshot.path
         if trimmed.isEmpty {
             return "Look at this screenshot: \(path)"
         }
-        return "\(trimmed)\n\nScreenshot: \(path)"
+        return "\(trimmed)  (screenshot: \(path))"
     }
 
     func teardown() {

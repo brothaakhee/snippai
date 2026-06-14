@@ -70,43 +70,18 @@ public enum ITermAuth {
     /// actor's executor, where an off-main call can deadlock. Shelling out (as the
     /// reference Python client does) is thread-safe and deterministic.
     static func runAppleScript(_ source: String) throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-"]   // read the script from stdin
-        let stdinPipe = Pipe(), stdoutPipe = Pipe(), stderrPipe = Pipe()
-        process.standardInput = stdinPipe
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-
         do {
-            try process.run()
-        } catch {
-            throw ITermAuthError.appleScriptFailed(code: -1, message: "could not launch osascript: \(error)")
-        }
-        stdinPipe.fileHandleForWriting.write(Data(source.utf8))
-        stdinPipe.fileHandleForWriting.closeFile()
-        let outData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-
-        if process.terminationStatus != 0 {
-            let stderr = String(data: errData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let code = parseErrorCode(stderr)
+            return try AppleScript.run(source)
+        } catch let AppleScriptError.scriptError(code, message) {
             // -2740/-2741 are the documented "iTerm2 too old" / disabled-API codes.
             if code == -2740 || code == -2741 { throw ITermAuthError.apiDisabled }
             // -1743 is errAEEventNotPermitted: the user denied Automation control.
             if code == -1743 {
                 throw ITermAuthError.denied("SnippAI isn’t allowed to control iTerm2. Enable it in System Settings → Privacy & Security → Automation.")
             }
-            throw ITermAuthError.appleScriptFailed(code: code ?? Int(process.terminationStatus), message: stderr)
+            throw ITermAuthError.appleScriptFailed(code: code, message: message)
+        } catch let AppleScriptError.launchFailed(message) {
+            throw ITermAuthError.appleScriptFailed(code: -1, message: message)
         }
-        return (String(data: outData, encoding: .utf8) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    /// Extracts the trailing AppleScript error code, e.g. "… (-2741)".
-    private static func parseErrorCode(_ stderr: String) -> Int? {
-        guard let open = stderr.lastIndex(of: "("), stderr.hasSuffix(")") else { return nil }
-        let inside = stderr[stderr.index(after: open)..<stderr.index(before: stderr.endIndex)]
-        return Int(inside)
     }
 }

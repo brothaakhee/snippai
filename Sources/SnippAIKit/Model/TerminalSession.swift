@@ -12,10 +12,11 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
     public var tabIndex: Int
     public var paneIndex: Int      // index of this session within its tab's split
     public var lastLine: String    // last on-screen non-empty line, for disambiguation
+    public var source: String      // which terminal app this session lives in (e.g. "iTerm2")
 
     public init(id: String, cwd: String = "", title: String = "", jobName: String = "",
                 windowID: String = "", tabID: String = "", windowNumber: Int = 0,
-                tabIndex: Int = 0, paneIndex: Int = 0, lastLine: String = "") {
+                tabIndex: Int = 0, paneIndex: Int = 0, lastLine: String = "", source: String = "") {
         self.id = id
         self.cwd = cwd
         self.title = title
@@ -26,6 +27,7 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
         self.tabIndex = tabIndex
         self.paneIndex = paneIndex
         self.lastLine = lastLine
+        self.source = source
     }
 
     /// The folder name of the working directory — the primary human label.
@@ -34,9 +36,9 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
         return name.isEmpty ? cwd : name
     }
 
-    /// Lowercased text the picker filters against (folder, job, title, path, last line).
+    /// Lowercased text the picker filters against (folder, job, title, path, last line, source).
     public var searchHaystack: String {
-        [folderName, jobName, title, cwd, lastLine].joined(separator: " ").lowercased()
+        [folderName, jobName, title, cwd, lastLine, source].joined(separator: " ").lowercased()
     }
 
     /// True when the running job looks like an interactive AI/agent CLI — these
@@ -49,6 +51,7 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
     /// Disambiguating sublabel given multiple sessions can share a cwd.
     public var disambiguator: String {
         var parts: [String] = []
+        if !source.isEmpty { parts.append(source) }
         if !jobName.isEmpty && jobName != "-" { parts.append(jobName) }
         parts.append("win \(windowNumber)·tab \(tabIndex + 1)")
         if paneIndex > 0 { parts.append("pane \(paneIndex + 1)") }

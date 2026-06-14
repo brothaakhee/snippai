@@ -25,7 +25,8 @@ public actor ITermAdapter: TargetAdapter {
                 for (paneIndex, sid) in paneIDs.enumerated() {
                     stubs.append(TerminalSession(
                         id: sid, windowID: window.windowID, tabID: tab.tabID,
-                        windowNumber: windowNumber, tabIndex: tabIndex, paneIndex: paneIndex))
+                        windowNumber: windowNumber, tabIndex: tabIndex, paneIndex: paneIndex,
+                        source: "iTerm2"))
                 }
             }
         }
@@ -70,7 +71,8 @@ public actor ITermAdapter: TargetAdapter {
     // MARK: - Send
 
     public func send(text: String, toSession sessionID: String) async throws {
-        try await client.sendText(sessionID: sessionID, text: text)
+        // Append the newline that submits the prompt (the adapter owns submission).
+        try await client.sendText(sessionID: sessionID, text: text + "\n")
     }
 
     // MARK: - Stream

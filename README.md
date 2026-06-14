@@ -50,8 +50,8 @@ The panel shows discoverable sessions; a router dispatches to a per-target deliv
 
 | Adapter | Capability | Status |
 |---|---|---|
-| iTerm2 | enumerate + send + stream a specific session | ✅ verified, POC target |
-| Terminal.app | AppleScript send/read | planned |
+| iTerm2 | enumerate + send + stream a specific session | ✅ built (native client) |
+| Terminal.app | AppleScript: discover / send / poll-stream / focus | ✅ built |
 | Claude Code desktop app | **probed — not viable.** Electron web content is opaque to Accessibility (no input/sessions exposed) and there's no public injection API. See [Probed](#probed-the-claude-desktop-app-is-not-adaptable). | ❌ rejected |
 | Hosted PTY | we own stdin/stdout; perfect targeting; enables Flavor B | v2 |
 
@@ -110,7 +110,7 @@ A native Swift app, no Python runtime. `SnippAIKit` is the engine (iTerm client 
 - **Native iTerm2 client** — AppleScript cookie/key → hand-rolled WebSocket (RFC 6455) over iTerm2's Unix domain socket → SwiftProtobuf messages generated from a version-exact `proto/api.proto`. Enumerate / send / stream / variables / activate. (`Sources/SnippAIKit/ITerm/`)
 - **Capture** — Carbon global hotkey (default ⌥⌘4, no Accessibility needed) → full-screen crosshair overlay (dim + clear selection hole + live dimension badge) → ScreenCaptureKit region capture → PNG. Multi-display + retina aware. (`Sources/SnippAI/Capture/`)
 - **Panel** (SwiftUI in a floating `NSPanel`) — screenshot header, **session picker** with rich disambiguating labels (folder · job · window/tab/pane · last on-screen line, agent sessions badged), a **live terminal mirror** that renders the session's emulated cells with ANSI colors + the cursor, and a message input. (`Sources/SnippAI/Panel/`)
-- **Adapter abstraction** — `TargetAdapter` protocol (iTerm2 is the first impl) so Terminal.app / hosted-PTY adapters slot in later. (The Claude desktop app was probed and rejected — see [Probed](#probed-the-claude-desktop-app-is-not-adaptable).)
+- **Adapter abstraction + router** — `TargetAdapter` protocol with two live impls (iTerm2 native client, Terminal.app via AppleScript). `AdapterRouter` connects to whatever's running, merges discovered sessions into one picker (tagged by source), and routes send/stream/focus back to the owning adapter. Terminal.app has no event stream or per-cell color, so its mirror is plain text refreshed by polling — a fidelity tradeoff vs the native iTerm2 client. (The Claude desktop app was probed and rejected — see [Probed](#probed-the-claude-desktop-app-is-not-adaptable); a hosted PTY remains the v2 north star.)
 
 ### Build & run the app
 ```bash
@@ -128,7 +128,8 @@ swift test                         # unit tests: RFC 6455 frame decoder + termin
 ## Remaining / next steps
 - [ ] Hotkey rebinding UI + onboarding for the two TCC grants.
 - [ ] Picker live screen-preview thumbnails (current labels already disambiguate).
-- [ ] Terminal.app adapter (AppleScript send/read). _(Claude desktop app probed — not adaptable; see above.)_
+- [x] Terminal.app adapter (AppleScript) + multi-adapter router. _(Claude desktop app probed — not adaptable; see above.)_
+- [ ] v2 "host model" (own the PTY) → enables the native-chat Flavor B.
 - [ ] v2 "host model" (own the PTY) → enables the native-chat Flavor B.
 
 ---
@@ -137,7 +138,7 @@ swift test                         # unit tests: RFC 6455 frame decoder + termin
 | Path | What |
 |---|---|
 | `README.md` | This document — current state, decisions, and verification. |
-| `Package.swift`, `Sources/` | The native app: `SnippAIKit` (engine) + `SnippAI` (menu-bar app) + `iterm-spike` (native tunnel spike/diagnostic). |
+| `Package.swift`, `Sources/` | The native app: `SnippAIKit` (engine — iTerm2 + Terminal.app adapters, router) + `SnippAI` (menu-bar app) + `iterm-spike` / `terminal-spike` (per-adapter spikes/diagnostics). |
 | `proto/api.proto` | Version-exact iTerm2 API schema, reconstructed offline from the installed `iterm2` lib by `tools/extract_proto.py`. |
 | `scripts/build_app.sh` | Assembles and ad-hoc-signs `SnippAI.app`. |
 | `tools/ax_probe.swift` | Accessibility probe used to reject the Claude-desktop adapter (`swift tools/ax_probe.swift`). Read-only — dumps the AX tree of the running Claude app. |
