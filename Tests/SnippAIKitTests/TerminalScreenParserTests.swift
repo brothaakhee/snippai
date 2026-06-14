@@ -63,6 +63,34 @@ final class TerminalScreenParserTests: XCTestCase {
         XCTAssertTrue(runs[0].style.bold)
     }
 
+    func testNulAndNonBreakingSpacesFoldToPlainSpace() {
+        // iTerm reports empty / column-positioned cells as NUL (U+0000); Ink-based
+        // TUIs emit NBSP (U+00A0) and friends for padding. Both render zero/odd-width
+        // in a text view and jam words together, so the parser folds them to U+0020.
+        var resp = Iterm2_GetBufferResponse()
+        resp.contents = [line("auto\u{00}mode\u{00}\u{00}on"),
+                         line("PR\u{A0}#7\u{202F}open")]
+        let screen = TerminalScreenParser.parse(resp)
+        XCTAssertEqual(screen.lines[0].plainText, "auto mode  on")
+        XCTAssertEqual(screen.lines[1].plainText, "PR #7 open")
+        // Column count (and thus alignment) is preserved exactly.
+        XCTAssertEqual(screen.lines[0].plainText.count, 13)
+    }
+
+    func testWideIdeographicSpaceIsPreserved() {
+        // U+3000 occupies two columns; folding it to one space would break alignment.
+        var resp = Iterm2_GetBufferResponse()
+        resp.contents = [line("a\u{3000}b")]
+        let screen = TerminalScreenParser.parse(resp)
+        XCTAssertEqual(screen.lines[0].plainText, "a\u{3000}b")
+    }
+
+    func testPlainScreenFoldsNul() {
+        // The Terminal.app text path runs through the same normalization.
+        let screen = TerminalScreen.plain("new\u{00}task")
+        XCTAssertEqual(screen.lines[0].plainText, "new task")
+    }
+
     func testRGBColorParsing() {
         var rgb = Iterm2_RGBColor(); rgb.red = 10; rgb.green = 20; rgb.blue = 30
         var style = Iterm2_CellStyle(); style.fgRgb = rgb; style.repeats = 1

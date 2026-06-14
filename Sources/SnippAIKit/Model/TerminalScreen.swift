@@ -87,7 +87,9 @@ extension TerminalScreen {
         var columns = 0
         let lines = rawLines.map { line -> TermLine in
             columns = max(columns, line.count)
-            return TermLine(cells: line.map { TermCell(text: String($0), style: .default) })
+            return TermLine(cells: line.map {
+                TermCell(text: TerminalScreenParser.normalizeSpaces(String($0)), style: .default)
+            })
         }
         return TerminalScreen(lines: lines, cursor: nil, columns: columns, rows: lines.count)
     }
@@ -149,17 +151,39 @@ public enum TerminalScreenParser {
             var view = String.UnicodeScalarView()
             for s in scalars[scalarIndex..<end] { view.append(s) }
             scalarIndex = end
-            let glyph = String(view)
+            let glyph = normalizeSpaces(String(view))
             let style = cellIndex < cellStyles.count ? cellStyles[cellIndex] : .default
             cells.append(TermCell(text: glyph.isEmpty ? " " : glyph, style: style))
         }
         // Any trailing scalars with no width info: append as single cells.
         while scalarIndex < scalars.count {
             var view = String.UnicodeScalarView(); view.append(scalars[scalarIndex])
-            cells.append(TermCell(text: String(view), style: .default))
+            cells.append(TermCell(text: normalizeSpaces(String(view)), style: .default))
             scalarIndex += 1
         }
         return cells
+    }
+
+    /// Folds blank-but-not-U+0020 cells to a plain ASCII space so they render with
+    /// width in the mirror. Two sources, both confirmed against live Claude Code:
+    ///   • U+0000 (NUL): iTerm reports empty / column-positioned cells as NUL, which
+    ///     a text view draws zero-width — jamming status bars and aligned rows.
+    ///   • U+00A0 & other Unicode space separators: Ink-based TUIs emit these for
+    ///     layout padding; some can collapse in a proportional-fallback render path.
+    /// Folding to U+0020 preserves column count (and thus alignment) exactly. The
+    /// wide ideographic space (U+3000) is left alone since it occupies two columns.
+    static func normalizeSpaces(_ s: String) -> String {
+        guard s.unicodeScalars.contains(where: { needsSpaceFold($0) }) else { return s }
+        var view = String.UnicodeScalarView()
+        for scalar in s.unicodeScalars {
+            view.append(needsSpaceFold(scalar) ? " " : scalar)
+        }
+        return String(view)
+    }
+
+    private static func needsSpaceFold(_ s: Unicode.Scalar) -> Bool {
+        if s == "\u{0000}" { return true }   // NUL = empty/column-positioned cell → space
+        return s != " " && s != "\u{3000}" && s.properties.generalCategory == .spaceSeparator
     }
 
     private static func convert(_ s: Iterm2_CellStyle) -> TermStyle {
