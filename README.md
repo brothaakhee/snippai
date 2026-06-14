@@ -52,7 +52,7 @@ The panel shows discoverable sessions; a router dispatches to a per-target deliv
 |---|---|---|
 | iTerm2 | enumerate + send + stream a specific session | ✅ verified, POC target |
 | Terminal.app | AppleScript send/read | planned |
-| Claude Code desktop app | needs hands-on Accessibility probe (are sessions individually addressable? does input accept a pasted image?) | open question |
+| Claude Code desktop app | **probed — not viable.** Electron web content is opaque to Accessibility (no input/sessions exposed) and there's no public injection API. See [Probed](#probed-the-claude-desktop-app-is-not-adaptable). | ❌ rejected |
 | Hosted PTY | we own stdin/stdout; perfect targeting; enables Flavor B | v2 |
 
 ---
@@ -77,10 +77,31 @@ On a real machine the spike found **5 sessions sharing one working directory, 4 
 
 ---
 
+## Probed: the Claude desktop app is *not* adaptable
+
+A hands-on Accessibility probe ([`tools/ax_probe.swift`](./tools/ax_probe.swift)) against the live Claude desktop app (`com.anthropic.claudefordesktop`, an Electron app — Claude Code runs inside it) answers open question #3 with a firm **no**:
+
+```
+AXIsProcessTrusted: true
+set AXManualAccessibility: ok        (but tree never populates — known Electron bug)
+windows: 1   total AX nodes: ~13   AXWebArea: 0   text inputs: 0
+VERDICT: BLOCKED — Chromium web content not exposed to Accessibility.
+```
+
+The entire chat UI lives in an opaque `AXWebArea` Chromium doesn't surface, so **sessions are not individually addressable and there is no settable input to inject a message/screenshot into.** Cross-checked against Anthropic docs:
+
+- **No public injection API** for a *running* desktop conversation. The only documented push mechanism is Claude Code **Channels** — CLI-only, research-preview, cloud-routed via Telegram/Discord/iMessage plugins — not the desktop app (consistent with the [locked architecture](#2-integration-strategy--augment-dont-replace-iterm-first)).
+- The **`claude://` URL scheme** only *prefills a new session* (`q=` text, ~14k chars, **no image attach**) — it can't target an existing conversation. `claude-cli://` is a launcher. Both are the rejected "spawn a new process" pattern, and neither carries an image.
+- Forcing Chromium's a11y tree needs `--force-renderer-accessibility` (a relaunch) or VoiceOver already running — neither is something SnippAI can do to a user's live app.
+
+**Conclusion:** the desktop app is rejected as an adapter. When the user runs Claude Code in a **terminal** (the common case), the verified iTerm2 adapter already covers it; Terminal.app is the natural next adapter.
+
+---
+
 ## Open questions / decisions pending
 1. ~~**iTerm client in the real app:** native Swift vs bundled Python.~~ **RESOLVED → native Swift, verified.** A native client (`Sources/SnippAIKit/ITerm/`) speaks the exact wire protocol — AppleScript cookie/key → WebSocket over iTerm2's **Unix domain socket** (`~/Library/Application Support/iTerm2/private/socket`) → SwiftProtobuf messages generated from a version-exact `proto/api.proto`. The Swift spike (`swift run iterm-spike`) is **ALL GREEN at 22ms round-trip** with **zero Python runtime** in the app. (Note: the protocol is served on the Unix socket, not TCP `:1912` as the reference lib's fallback URI implies; the native client connects to the socket directly.)
 2. **Picker labeling** design, given the multi-session finding above.
-3. **Claude Code desktop app** adapter viability — needs a hands-on Accessibility Inspector probe.
+3. ~~**Claude Code desktop app** adapter viability.~~ **RESOLVED → not viable** (see [Probed](#probed-the-claude-desktop-app-is-not-adaptable)).
 
 ## What's built (POC)
 
@@ -89,7 +110,7 @@ A native Swift app, no Python runtime. `SnippAIKit` is the engine (iTerm client 
 - **Native iTerm2 client** — AppleScript cookie/key → hand-rolled WebSocket (RFC 6455) over iTerm2's Unix domain socket → SwiftProtobuf messages generated from a version-exact `proto/api.proto`. Enumerate / send / stream / variables / activate. (`Sources/SnippAIKit/ITerm/`)
 - **Capture** — Carbon global hotkey (default ⌥⌘4, no Accessibility needed) → full-screen crosshair overlay (dim + clear selection hole + live dimension badge) → ScreenCaptureKit region capture → PNG. Multi-display + retina aware. (`Sources/SnippAI/Capture/`)
 - **Panel** (SwiftUI in a floating `NSPanel`) — screenshot header, **session picker** with rich disambiguating labels (folder · job · window/tab/pane · last on-screen line, agent sessions badged), a **live terminal mirror** that renders the session's emulated cells with ANSI colors + the cursor, and a message input. (`Sources/SnippAI/Panel/`)
-- **Adapter abstraction** — `TargetAdapter` protocol (iTerm2 is the first impl) so Terminal.app / Claude desktop / hosted-PTY adapters slot in later.
+- **Adapter abstraction** — `TargetAdapter` protocol (iTerm2 is the first impl) so Terminal.app / hosted-PTY adapters slot in later. (The Claude desktop app was probed and rejected — see [Probed](#probed-the-claude-desktop-app-is-not-adaptable).)
 
 ### Build & run the app
 ```bash
@@ -107,7 +128,7 @@ swift test                         # unit tests: RFC 6455 frame decoder + termin
 ## Remaining / next steps
 - [ ] Hotkey rebinding UI + onboarding for the two TCC grants.
 - [ ] Picker live screen-preview thumbnails (current labels already disambiguate).
-- [ ] Terminal.app + Claude-desktop adapters (Accessibility probe for the latter).
+- [ ] Terminal.app adapter (AppleScript send/read). _(Claude desktop app probed — not adaptable; see above.)_
 - [ ] v2 "host model" (own the PTY) → enables the native-chat Flavor B.
 
 ---
@@ -119,4 +140,5 @@ swift test                         # unit tests: RFC 6455 frame decoder + termin
 | `Package.swift`, `Sources/` | The native app: `SnippAIKit` (engine) + `SnippAI` (menu-bar app) + `iterm-spike` (native tunnel spike/diagnostic). |
 | `proto/api.proto` | Version-exact iTerm2 API schema, reconstructed offline from the installed `iterm2` lib by `tools/extract_proto.py`. |
 | `scripts/build_app.sh` | Assembles and ad-hoc-signs `SnippAI.app`. |
+| `tools/ax_probe.swift` | Accessibility probe used to reject the Claude-desktop adapter (`swift tools/ax_probe.swift`). Read-only — dumps the AX tree of the running Claude app. |
 | `spike_iterm.py` | The original Python de-risking spike (kept for reference). Safe — reads existing sessions; runs its send/stream test in a throwaway window it closes. |
