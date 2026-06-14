@@ -7,17 +7,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var panelController = PanelController(model: model)
     private let captureController = CaptureController()
     private let onboarding = OnboardingController()
+    private let shortcutStore = ShortcutStore()
+    private lazy var settings = SettingsController(store: shortcutStore)
     private var statusItem: NSStatusItem?
+    private var captureMenuItem: NSMenuItem?
     private var hotKey: HotKey?
-    private let combo = HotKey.KeyCombo.defaultCombo
     private var isCapturing = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         CaptureController.sweepOldScreenshots()
         setupStatusItem()
-        hotKey = HotKey(combo: combo) { [weak self] in
-            self?.beginCapture()
+        bindHotKey(to: shortcutStore.combo)
+        // Re-register live (no relaunch) whenever the user changes the shortcut, and
+        // refresh the menu so it shows the new glyphs.
+        shortcutStore.onChange = { [weak self] combo in
+            guard let self else { return true }
+            let ok = self.bindHotKey(to: combo)
+            self.refreshCaptureMenuTitle()
+            return ok
+        }
+        onboarding.shortcutDisplayProvider = { [weak self] in
+            self?.shortcutStore.combo.displayString ?? "⌥⌘4"
         }
 
         // Debug: self-test the ScreenCaptureKit path on an explicit global rect.
@@ -29,6 +40,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Debug: force the onboarding window open for inspection.
         if ProcessInfo.processInfo.environment["SNIPPAI_SHOW_ONBOARDING"] == "1" {
             onboarding.show()
+            return
+        }
+
+        // Debug: force the settings window open for inspection.
+        if ProcessInfo.processInfo.environment["SNIPPAI_SHOW_SETTINGS"] == "1" {
+            settings.show()
             return
         }
 
@@ -52,6 +69,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // MARK: - Global hotkey
+
+    /// (Re)registers the global capture hotkey, releasing any prior registration
+    /// first so the two never collide on the same Carbon hotkey ID. Returns whether
+    /// the OS accepted the combo.
+    @discardableResult
+    private func bindHotKey(to combo: HotKey.KeyCombo) -> Bool {
+        hotKey = nil   // release old Carbon registration before claiming the new combo
+        let key = HotKey(combo: combo) { [weak self] in self?.beginCapture() }
+        hotKey = key
+        return key.isRegistered
+    }
+
     // MARK: - Menu bar
 
     private func setupStatusItem() {
@@ -61,15 +91,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.image?.isTemplate = true
         }
         let menu = NSMenu()
-        let captureItem = NSMenuItem(title: "Capture & Send  (\(combo.displayString))",
-                                     action: #selector(menuCapture), keyEquivalent: "")
+        let captureItem = NSMenuItem(title: captureMenuTitle, action: #selector(menuCapture), keyEquivalent: "")
         captureItem.target = self
         menu.addItem(captureItem)
+        self.captureMenuItem = captureItem
         let panelItem = NSMenuItem(title: "Open Panel", action: #selector(menuOpenPanel), keyEquivalent: "")
         panelItem.target = self
         menu.addItem(panelItem)
         menu.addItem(.separator())
-        let setupItem = NSMenuItem(title: "Setup…", action: #selector(menuSetup), keyEquivalent: "")
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(menuSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+        let setupItem = NSMenuItem(title: "Permissions…", action: #selector(menuSetup), keyEquivalent: "")
         setupItem.target = self
         menu.addItem(setupItem)
         menu.addItem(.separator())
@@ -79,7 +112,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.statusItem = item
     }
 
+    private var captureMenuTitle: String { "Capture & Send  (\(shortcutStore.combo.displayString))" }
+
+    private func refreshCaptureMenuTitle() { captureMenuItem?.title = captureMenuTitle }
+
     @objc private func menuCapture() { beginCapture() }
+
+    @objc private func menuSettings() { settings.show() }
 
     @objc private func menuSetup() { onboarding.show() }
 

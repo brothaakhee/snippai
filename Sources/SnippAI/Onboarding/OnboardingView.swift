@@ -4,6 +4,7 @@ import SwiftUI
 /// gates (Screen Recording + iTerm2 control) so the first capture can't silently fail.
 struct OnboardingView: View {
     @Bindable var model: OnboardingModel
+    var shortcutDisplay: String = "⌥⌘4"
     var onDone: () -> Void
 
     var body: some View {
@@ -112,7 +113,7 @@ struct OnboardingView: View {
     private var footer: some View {
         HStack {
             if model.snapshot.allReady {
-                Label("All set — press ⌥⌘4 anywhere to capture.", systemImage: "checkmark.circle.fill")
+                Label("All set — press \(shortcutDisplay) anywhere to capture.", systemImage: "checkmark.circle.fill")
                     .scaledFont(12).foregroundStyle(.green)
             } else {
                 Button("Re-check", action: model.refresh)

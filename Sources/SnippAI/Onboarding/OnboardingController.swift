@@ -10,6 +10,9 @@ final class OnboardingController: NSObject, NSWindowDelegate {
     private let model = OnboardingModel()
     private var activationObserver: NSObjectProtocol?
 
+    /// Supplies the current capture-shortcut glyphs for the "All set" footer line.
+    var shortcutDisplayProvider: () -> String = { "⌥⌘4" }
+
     var isReady: Bool { model.snapshot.allReady }
 
     func show() {
@@ -21,7 +24,9 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         }
 
         NSApp.setActivationPolicy(.regular)
-        let hosting = NSHostingController(rootView: OnboardingView(model: model, onDone: { [weak self] in
+        let hosting = NSHostingController(rootView: OnboardingView(model: model,
+                                                                   shortcutDisplay: shortcutDisplayProvider(),
+                                                                   onDone: { [weak self] in
             self?.close()
         }))
         let window = NSWindow(contentViewController: hosting)
