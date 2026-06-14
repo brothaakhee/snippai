@@ -95,8 +95,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func beginCapture() {
         guard !isCapturing else { return }
         isCapturing = true
-        // Hide the panel during selection so it isn't captured or in the way.
-        panelController.hide()
+        // Note: we deliberately DON'T hide the panel here — the crosshair overlay
+        // sits above it, so the user can re-capture (or capture the panel itself)
+        // without it vanishing. They can drag the panel aside if it's in the way.
         Task {
             defer { isCapturing = false }
             do {

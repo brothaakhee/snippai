@@ -25,11 +25,17 @@ cp "${BIN_PATH}" "${APP}/Contents/MacOS/SnippAI"
 cp "${ROOT}/Resources/Info.plist" "${APP}/Contents/Info.plist"
 printf 'APPL????' > "${APP}/Contents/PkgInfo"
 
-echo "==> Codesigning (ad-hoc)..."
-# Plain ad-hoc signature (no hardened runtime) is the most reliable for local
-# TCC: it gives the bundle a stable identity so macOS remembers the Screen
-# Recording / Automation grants, without notarization friction.
-codesign --force --deep --sign - "${APP}"
+echo "==> Codesigning..."
+# Prefer a STABLE self-signed identity ("SnippAI Dev") so TCC grants (Screen
+# Recording / Automation) survive rebuilds — ad-hoc changes the code hash every
+# build and silently invalidates them. Falls back to ad-hoc if the cert is absent.
+# Create the cert once with: scripts/make_signing_cert.sh
+if codesign --force --deep --sign "SnippAI Dev" "${APP}" 2>/dev/null; then
+    echo "    signed with stable identity 'SnippAI Dev' (grants persist across rebuilds)"
+else
+    echo "    'SnippAI Dev' identity not found — ad-hoc signing (grants reset each rebuild)"
+    codesign --force --deep --sign - "${APP}"
+fi
 
 echo "==> Done: ${APP}"
 echo "    Launch with:  open \"${APP}\""

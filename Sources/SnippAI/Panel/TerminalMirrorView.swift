@@ -1,119 +1,119 @@
 import SwiftUI
+import AppKit
 import SnippAIKit
 
-/// Renders a `TerminalScreen` as a faithful, read-only mirror — monospaced cells,
-/// ANSI colors, bold/italic/underline, and a block cursor.
-struct TerminalMirrorView: View {
+/// Renders a `TerminalScreen` as a faithful, read-only mirror. Backed by an
+/// `NSTextView` rather than SwiftUI `Text`: SwiftUI's Text trims whitespace on
+/// runs that carry a `.font` attribute (so bold text loses its spaces), whereas
+/// NSTextView renders per-range fonts + spaces + colors correctly — essential for
+/// a monospaced terminal mirror.
+struct TerminalMirrorView: NSViewRepresentable {
     let screen: TerminalScreen
-    // Scales with Dynamic Type so low-vision users can read the mirror too.
     @ScaledMetric(relativeTo: .body) private var fontSize: CGFloat = 12
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var font: Font { .system(size: fontSize, weight: .regular, design: .monospaced) }
+    func makeNSView(context: Context) -> NSScrollView {
+        let textView = NSTextView()
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.drawsBackground = true
+        textView.backgroundColor = TerminalPalette.defaultBackgroundNS
+        textView.textContainerInset = NSSize(width: 12, height: 8)
+        // Terminal lines must NOT wrap (wrapping breaks the monospaced grid) — let
+        // long lines extend and clip on the right.
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = true
+        textView.textContainer?.widthTracksTextView = false
+        let huge = CGFloat.greatestFiniteMagnitude
+        textView.textContainer?.size = NSSize(width: huge, height: huge)
+        textView.maxSize = NSSize(width: huge, height: huge)
 
-    var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: 0) {
-                    if screen.lines.isEmpty {
-                        HStack(spacing: 8) {
-                            ProgressView().controlSize(.small)
-                            Text("Connecting to session…").font(font)
-                        }
-                        .foregroundStyle(.secondary)
-                        .padding(12)
-                    } else {
-                        ForEach(Array(screen.lines.enumerated()), id: \.offset) { index, line in
-                            lineView(line, row: index)
-                                .id(index)
-                        }
-                    }
+        let scroll = NSScrollView()
+        scroll.documentView = textView
+        scroll.drawsBackground = true
+        scroll.backgroundColor = TerminalPalette.defaultBackgroundNS
+        scroll.hasVerticalScroller = true
+        scroll.hasHorizontalScroller = false   // clip long lines instead of scrolling
+        scroll.scrollerStyle = .overlay
+        return scroll
+    }
+
+    func updateNSView(_ scroll: NSScrollView, context: Context) {
+        guard let textView = scroll.documentView as? NSTextView else { return }
+        let attr = Self.attributed(screen, fontSize: fontSize)
+        let wasAtBottom = isScrolledToBottom(scroll)
+        textView.textStorage?.setAttributedString(attr)
+        // Follow the tail (like a live terminal) unless the user scrolled up.
+        if wasAtBottom { textView.scrollToEndOfDocument(nil) }
+    }
+
+    private func isScrolledToBottom(_ scroll: NSScrollView) -> Bool {
+        let visible = scroll.contentView.documentVisibleRect
+        let height = scroll.documentView?.bounds.height ?? 0
+        return visible.maxY >= height - 24 || height <= visible.height
+    }
+
+    // MARK: - Build the styled string
+
+    static func attributed(_ screen: TerminalScreen, fontSize: CGFloat) -> NSAttributedString {
+        let base = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let bold = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .bold)
+        let result = NSMutableAttributedString()
+
+        if screen.lines.isEmpty {
+            return NSAttributedString(string: "Connecting to session…", attributes: [
+                .font: base, .foregroundColor: NSColor.secondaryLabelColor])
+        }
+
+        for (row, line) in screen.lines.enumerated() {
+            for run in line.runs() where !run.text.isEmpty {
+                var attrs: [NSAttributedString.Key: Any] = [:]
+                let style = run.style
+                var font = style.bold ? bold : base
+                if style.italic, let italic = applyItalic(font) { font = italic }
+                attrs[.font] = font
+
+                var fg = TerminalPalette.nsColor(style.fg)
+                var bg = TerminalPalette.nsColor(style.bg)
+                if style.inverse { swap(&fg, &bg) }
+                if style.faint { fg = fg.withAlphaComponent(0.6) }
+                attrs[.foregroundColor] = fg
+                if style.inverse || style.bg != .defaultBackground {
+                    attrs[.backgroundColor] = bg
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .textSelection(.enabled)
+                if style.underline { attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue }
+                if style.strikethrough { attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
+                result.append(NSAttributedString(string: run.text, attributes: attrs))
             }
-            .background(TerminalPalette.defaultBackground)
-            // Re-pin on ANY content change (TUIs redraw in place without adding
-            // lines), anchoring to the cursor row when present.
-            .onChange(of: screen) { scrollToActive(proxy) }
-            .onAppear { scrollToActive(proxy) }
-        }
-        // Expose the mirror as one labeled, value-bearing element for VoiceOver.
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Live terminal mirror")
-        .accessibilityValue(screen.lastNonEmptyLine ?? "Connecting")
-    }
-
-    private func scrollToActive(_ proxy: ScrollViewProxy) {
-        let target = screen.cursor?.y ?? screen.lines.indices.last
-        guard let target else { return }
-        if reduceMotion {
-            proxy.scrollTo(target, anchor: .bottom)
-        } else {
-            withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(target, anchor: .bottom) }
-        }
-    }
-
-    @ViewBuilder
-    private func lineView(_ line: TermLine, row: Int) -> some View {
-        let cursorX = (screen.cursor?.y == row) ? screen.cursor?.x : nil
-        Text(attributedLine(line, cursorX: cursorX))
-            .font(font)
-            .lineLimit(1)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// Builds ONE AttributedString from the full line text and applies styles to
-    /// character ranges. Building from a single string (rather than concatenating
-    /// many per-run segments, each carrying a `.font`) keeps every space intact —
-    /// SwiftUI's Text trims whitespace across attribute-run boundaries otherwise.
-    private func attributedLine(_ line: TermLine, cursorX: Int?) -> AttributedString {
-        var attr = AttributedString(line.plainText)
-        var index = attr.startIndex
-        for run in line.runs() where !run.text.isEmpty {
-            let end = attr.index(index, offsetByCharacters: run.text.count)
-            apply(run.style, to: &attr, in: index..<end)
-            index = end
-        }
-        // Block cursor: invert the cell at cursorX (append a block if past EOL).
-        if let cursorX {
-            let total = attr.characters.count
-            if cursorX < total {
-                let start = attr.index(attr.startIndex, offsetByCharacters: cursorX)
-                let stop = attr.index(start, offsetByCharacters: 1)
-                attr[start..<stop].backgroundColor = TerminalPalette.defaultForeground
-                attr[start..<stop].foregroundColor = TerminalPalette.defaultBackground
-            } else {
-                var block = AttributedString(" ")
-                block.backgroundColor = TerminalPalette.defaultForeground
-                block.foregroundColor = TerminalPalette.defaultBackground
-                attr += block
+            if row < screen.lines.count - 1 {
+                result.append(NSAttributedString(string: "\n", attributes: [.font: base]))
             }
         }
-        return attr
+
+        // Block cursor: invert the cell at the cursor position.
+        if let cursor = screen.cursor {
+            let offset = lineStartOffset(screen, row: cursor.y) + cursor.x
+            if offset >= 0, offset < result.length {
+                result.addAttribute(.backgroundColor, value: TerminalPalette.nsColor(.defaultForeground),
+                                    range: NSRange(location: offset, length: 1))
+                result.addAttribute(.foregroundColor, value: TerminalPalette.nsColor(.defaultBackground),
+                                    range: NSRange(location: offset, length: 1))
+            }
+        }
+        return result
     }
 
-    /// Applies a cell style to a range. Only sets `.font` for bold/italic (the base
-    /// monospaced font comes from the view's `.font(font)`), minimizing font runs.
-    private func apply(_ style: TermStyle, to attr: inout AttributedString,
-                       in range: Range<AttributedString.Index>) {
-        var fg = TerminalPalette.color(style.fg, isForeground: true)
-        var bg = TerminalPalette.color(style.bg, isForeground: false)
-        if style.inverse { swap(&fg, &bg) }
-        if style.faint { fg = fg.opacity(0.6) }
-        attr[range].foregroundColor = fg
-        if style.inverse || style.bg != .defaultBackground {
-            attr[range].backgroundColor = bg
+    /// Character offset of the start of `row` (accounting for the \n joiners).
+    private static func lineStartOffset(_ screen: TerminalScreen, row: Int) -> Int {
+        guard row > 0 else { return 0 }
+        var offset = 0
+        for i in 0..<min(row, screen.lines.count) {
+            offset += screen.lines[i].plainText.count + 1   // +1 for the joining \n
         }
-        if style.bold || style.italic {
-            var f = Font.system(size: fontSize, weight: style.bold ? .bold : .regular, design: .monospaced)
-            if style.italic { f = f.italic() }
-            attr[range].font = f
-        }
-        if style.underline { attr[range].underlineStyle = .single }
-        if style.strikethrough { attr[range].strikethroughStyle = .single }
+        return offset
+    }
+
+    private static func applyItalic(_ font: NSFont) -> NSFont? {
+        let descriptor = font.fontDescriptor.withSymbolicTraits(.italic)
+        return NSFont(descriptor: descriptor, size: font.pointSize)
     }
 }
