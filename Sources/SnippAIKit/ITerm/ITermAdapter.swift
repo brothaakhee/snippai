@@ -71,8 +71,14 @@ public actor ITermAdapter: TargetAdapter {
     // MARK: - Send
 
     public func send(text: String, toSession sessionID: String) async throws {
-        // Append the newline that submits the prompt (the adapter owns submission).
-        try await client.sendText(sessionID: sessionID, text: text + "\n")
+        // Submit with a carriage return (the Return key), not "\n": a raw-mode TUI
+        // like Claude Code listens for \r to submit, and treats a trailing \n as a
+        // literal newline (so the message would paste but never send). Send the
+        // Return as a separate write so it lands as a distinct keypress, not part
+        // of the same input burst (which some TUIs treat as a paste).
+        try await client.sendText(sessionID: sessionID, text: text)
+        try await Task.sleep(nanoseconds: 60_000_000)
+        try await client.sendText(sessionID: sessionID, text: "\r")
     }
 
     // MARK: - Stream

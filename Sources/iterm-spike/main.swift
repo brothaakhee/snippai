@@ -61,11 +61,13 @@ func run() async -> Bool {
         let stream = await client.notifications()
         try await Task.sleep(nanoseconds: 600_000_000) // let the shell prompt settle
 
-        // ---- LEG 2: SEND --------------------------------------------------
-        let payload = "echo \"\(token) :: please look at \(fakeShot)\"\n"
+        // ---- LEG 2: SEND (via the adapter, exercising the \r submit path) --
+        let payload = "echo \"\(token) :: please look at \(fakeShot)\""
         let t0 = Date()
-        try await client.sendText(sessionID: testSession, text: payload)
-        line("[LEG 2] SEND: injected \(payload.debugDescription)")
+        let adapter = ITermAdapter()
+        try await adapter.connect()
+        try await adapter.send(text: payload, toSession: testSession)   // appends \r as a separate keypress
+        line("[LEG 2] SEND: adapter.send \(payload.debugDescription) (+\\r)")
         sendOK = true
 
         // ---- LEG 3: STREAM ------------------------------------------------

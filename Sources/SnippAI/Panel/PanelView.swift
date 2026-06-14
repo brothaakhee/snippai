@@ -203,7 +203,8 @@ private struct ComposeView: View {
             }
             footer
         }
-        .padding(.horizontal, PanelStyle.contentInset).padding(.vertical, 10)
+        // Extra bottom padding so the footer clears the panel's 14pt rounded corner.
+        .padding(.horizontal, PanelStyle.contentInset).padding(.top, 10).padding(.bottom, 16)
     }
 
     @ViewBuilder

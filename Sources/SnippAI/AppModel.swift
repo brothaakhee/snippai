@@ -30,9 +30,12 @@ final class AppModel {
     let adapter: any TargetAdapter
     private var streamTask: Task<Void, Never>?
     private var streamGeneration = 0
+    private static let lastSessionKey = "lastUsedSessionID"
+    private var lastUsedSessionID: String?
 
     init(adapter: any TargetAdapter = AdapterRouter(adapters: [ITermAdapter(), TerminalAppAdapter()])) {
         self.adapter = adapter
+        lastUsedSessionID = UserDefaults.standard.string(forKey: Self.lastSessionKey)
     }
 
     var selectedSession: TerminalSession? {
@@ -84,13 +87,21 @@ final class AppModel {
         do {
             try await adapter.connect()
             let discovered = try await adapter.discover()
-            sessions = discovered
+            // Pin the last-used session to the top so it's immediately visible.
+            if let last = lastUsedSessionID, let idx = discovered.firstIndex(where: { $0.id == last }) {
+                var reordered = discovered
+                reordered.insert(reordered.remove(at: idx), at: 0)
+                sessions = reordered
+            } else {
+                sessions = discovered
+            }
             connectionError = nil
-            // Default/repair selection against the CURRENT filter: prefer an agent
-            // session, else the first visible result. Also drops a stale selection
-            // (closed session, or filtered out after cwd/lastLine changed).
+            // Default/repair selection against the CURRENT filter: prefer the
+            // last-used session, then an agent session, then the first result.
+            // Also drops a stale selection (closed, or filtered out).
             if !filteredSessions.contains(where: { $0.id == selectedSessionID }) {
-                selectedSessionID = filteredSessions.first(where: { $0.looksLikeAgent })?.id
+                selectedSessionID = filteredSessions.first(where: { $0.id == lastUsedSessionID })?.id
+                    ?? filteredSessions.first(where: { $0.looksLikeAgent })?.id
                     ?? filteredSessions.first?.id
             }
         } catch {
@@ -117,6 +128,8 @@ final class AppModel {
 
     func choose(sessionID: String) {
         selectedSessionID = sessionID
+        lastUsedSessionID = sessionID
+        UserDefaults.standard.set(sessionID, forKey: Self.lastSessionKey)
         justSent = false
         statusMessage = nil
         startComposing(sessionID: sessionID)

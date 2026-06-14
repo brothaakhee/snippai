@@ -66,49 +66,54 @@ struct TerminalMirrorView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// Builds ONE AttributedString from the full line text and applies styles to
+    /// character ranges. Building from a single string (rather than concatenating
+    /// many per-run segments, each carrying a `.font`) keeps every space intact —
+    /// SwiftUI's Text trims whitespace across attribute-run boundaries otherwise.
     private func attributedLine(_ line: TermLine, cursorX: Int?) -> AttributedString {
-        var result = AttributedString()
-        var column = 0
-        for run in line.runs() {
-            // Split the run if the cursor falls inside it, so we can invert one cell.
-            if let cursorX, cursorX >= column, cursorX < column + run.text.count {
-                let chars = Array(run.text)
-                let before = String(chars[0..<(cursorX - column)])
-                let at = String(chars[cursorX - column])
-                let after = String(chars[(cursorX - column + 1)...])
-                if !before.isEmpty { result += segment(before, style: run.style) }
-                result += segment(at.isEmpty ? " " : at, style: run.style, cursor: true)
-                if !after.isEmpty { result += segment(after, style: run.style) }
+        var attr = AttributedString(line.plainText)
+        var index = attr.startIndex
+        for run in line.runs() where !run.text.isEmpty {
+            let end = attr.index(index, offsetByCharacters: run.text.count)
+            apply(run.style, to: &attr, in: index..<end)
+            index = end
+        }
+        // Block cursor: invert the cell at cursorX (append a block if past EOL).
+        if let cursorX {
+            let total = attr.characters.count
+            if cursorX < total {
+                let start = attr.index(attr.startIndex, offsetByCharacters: cursorX)
+                let stop = attr.index(start, offsetByCharacters: 1)
+                attr[start..<stop].backgroundColor = TerminalPalette.defaultForeground
+                attr[start..<stop].foregroundColor = TerminalPalette.defaultBackground
             } else {
-                result += segment(run.text, style: run.style)
+                var block = AttributedString(" ")
+                block.backgroundColor = TerminalPalette.defaultForeground
+                block.foregroundColor = TerminalPalette.defaultBackground
+                attr += block
             }
-            column += run.text.count
         }
-        // Cursor past the end of the line content.
-        if let cursorX, cursorX >= column {
-            let pad = String(repeating: " ", count: cursorX - column)
-            if !pad.isEmpty { result += segment(pad, style: .default) }
-            result += segment(" ", style: .default, cursor: true)
-        }
-        return result
+        return attr
     }
 
-    private func segment(_ text: String, style: TermStyle, cursor: Bool = false) -> AttributedString {
-        var seg = AttributedString(text)
-        let inverse = style.inverse != cursor   // cursor inverts on top of any existing inverse
+    /// Applies a cell style to a range. Only sets `.font` for bold/italic (the base
+    /// monospaced font comes from the view's `.font(font)`), minimizing font runs.
+    private func apply(_ style: TermStyle, to attr: inout AttributedString,
+                       in range: Range<AttributedString.Index>) {
         var fg = TerminalPalette.color(style.fg, isForeground: true)
         var bg = TerminalPalette.color(style.bg, isForeground: false)
-        if inverse { swap(&fg, &bg) }
+        if style.inverse { swap(&fg, &bg) }
         if style.faint { fg = fg.opacity(0.6) }
-        seg.foregroundColor = fg
-        if inverse || style.bg != .defaultBackground {
-            seg.backgroundColor = bg
+        attr[range].foregroundColor = fg
+        if style.inverse || style.bg != .defaultBackground {
+            attr[range].backgroundColor = bg
         }
-        var font = Font.system(size: fontSize, weight: style.bold ? .bold : .regular, design: .monospaced)
-        if style.italic { font = font.italic() }
-        seg.font = font
-        if style.underline { seg.underlineStyle = .single }
-        if style.strikethrough { seg.strikethroughStyle = .single }
-        return seg
+        if style.bold || style.italic {
+            var f = Font.system(size: fontSize, weight: style.bold ? .bold : .regular, design: .monospaced)
+            if style.italic { f = f.italic() }
+            attr[range].font = f
+        }
+        if style.underline { attr[range].underlineStyle = .single }
+        if style.strikethrough { attr[range].strikethroughStyle = .single }
     }
 }

@@ -113,7 +113,10 @@ struct SessionPickerView: View {
                     }
                     .padding(PanelStyle.contentInset - 4)
                 }
-                .onAppear { scrollProxy = proxy }
+                .onAppear {
+                    scrollProxy = proxy
+                    if let id = model.selectedSessionID { proxy.scrollTo(id, anchor: .center) }
+                }
             }
         }
     }
