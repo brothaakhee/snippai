@@ -38,6 +38,9 @@ final class AppModel {
     private var knownSessionIDs: Set<String> = []
     private var ttyToSessionID: [String: String] = [:]
     private var lastAttention = false
+    /// Last rendered frame per session, so re-selecting a target (e.g. via ⌘-arrow
+    /// cycling) repaints its mirror instantly instead of flashing the placeholder.
+    private var screenCache: [String: TerminalScreen] = [:]
 
     let adapter: any TargetAdapter
     private var streamTask: Task<Void, Never>?
@@ -203,7 +206,10 @@ final class AppModel {
 
     private func startComposing(sessionID: String) {
         phase = .composing
-        screen = .empty
+        // Show this session's last-known frame instantly (keyed by session, so it's
+        // never another session's content) — only fall back to the "Connecting…"
+        // placeholder for a target we haven't mirrored yet. Keeps cycling smooth.
+        screen = screenCache[sessionID] ?? .empty
         connectionError = nil
         streamTask?.cancel()
         streamGeneration += 1
@@ -218,6 +224,7 @@ final class AppModel {
                 for await snapshot in stream {
                     guard let self, self.streamGeneration == generation else { return }
                     self.screen = snapshot
+                    self.screenCache[sessionID] = snapshot
                     self.reconcileStateWithMirror(sessionID: sessionID)
                 }
                 // Stream ended without an error → the connection dropped (e.g. iTerm
@@ -307,6 +314,7 @@ final class AppModel {
         let liveIDs = Set(discovered.map { $0.id })
         let before = agentStates.count
         agentStates = agentStates.filter { liveIDs.contains($0.key) }
+        screenCache = screenCache.filter { liveIDs.contains($0.key) }
         if agentStates.count != before { notifyAttention() }
     }
 

@@ -175,7 +175,7 @@ private struct ComposeView: View {
                 Text("⌘ ←→")
                     .scaledFont(10, design: .rounded)
                     .foregroundStyle(.tertiary)
-                    .help("Switch target: ⌘← previous · ⌘→ next")
+                    .help("Switch target: ⌘← or ⌘↑ previous · ⌘→ or ⌘↓ next")
                     .accessibilityHidden(true)
             }
             Button("Change") { model.backToPicker() }
@@ -199,6 +199,12 @@ private struct ComposeView: View {
         if let id = model.selectedSessionID {
             let state = model.agentState(for: id)
             if state.isVisible { label += ", \(state.label)" }
+        }
+        // VoiceOver parity for the cycling UI: announce position + the shortcut, but
+        // only when there's actually more than one target to cycle through.
+        if let pos = model.targetPosition, pos.total > 1 {
+            label += ", target \(pos.index) of \(pos.total)"
+            label += ". Press Command Left or Command Right to switch target"
         }
         return label
     }
