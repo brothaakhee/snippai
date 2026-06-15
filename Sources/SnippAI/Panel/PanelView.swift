@@ -132,6 +132,11 @@ private struct ComposeView: View {
             }
             // A live-mirror indicator so the terminal's liveness is legible.
             LiveDot()
+            // Hook-derived semantic state (Done / Needs you), when known. Pure
+            // enrichment alongside the live mirror.
+            if let id = model.selectedSessionID {
+                AgentStateBadge(state: model.agentState(for: id))
+            }
             Spacer()
             Button("Change") { model.backToPicker() }
                 .scaledFont(11)

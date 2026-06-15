@@ -4,6 +4,7 @@ import SwiftUI
 /// window's material/typography so the two feel like one app.
 struct SettingsView: View {
     @Bindable var store: ShortcutStore
+    @Bindable var hooks: HookController
     var onDone: () -> Void
 
     @State private var recorder = ShortcutRecorder()
@@ -24,6 +25,7 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .transition(.opacity)
                 }
+                claudeStatusCard
             }
             .padding(20)
             Divider()
@@ -76,6 +78,51 @@ struct SettingsView: View {
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: PanelStyle.cardRadius))
         .animation(.easeInOut(duration: 0.15), value: recorder.isRecording)
         .animation(.easeInOut(duration: 0.15), value: store.combo)
+    }
+
+    // MARK: Claude Code status card
+
+    private var claudeStatusCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: "dot.radiowaves.left.and.right")
+                    .scaledFont(15).foregroundStyle(.secondary).frame(width: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("Claude Code status").scaledFont(13, weight: .semibold)
+                        Text("beta")
+                            .scaledFont(9, weight: .bold)
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(Color.secondary.opacity(0.2), in: Capsule())
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("Show a “Done / Needs you” badge by letting Claude Code notify SnippAI.")
+                        .scaledFont(11).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                Toggle("", isOn: Binding(
+                    get: { hooks.isEnabled },
+                    set: { hooks.setEnabled($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .accessibilityLabel("Enable Claude Code status")
+            }
+            Text("Adds two read-only hooks to ~/.claude/settings.json (a timestamped backup is made first). It never blocks Claude, and turning this off removes them.")
+                .scaledFont(10).foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let status = hooks.statusMessage {
+                Label(status, systemImage: hooks.statusIsWarning ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                    .scaledFont(10)
+                    .foregroundStyle(hooks.statusIsWarning ? Color.orange : .green)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
+            }
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: PanelStyle.cardRadius))
+        .animation(.easeInOut(duration: 0.15), value: hooks.isEnabled)
     }
 
     private var recorderField: some View {

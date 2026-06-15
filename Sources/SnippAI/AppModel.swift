@@ -27,6 +27,18 @@ final class AppModel {
     var isLoadingSessions = false
     var justSent = false
 
+    /// Push-hook-derived agent state per session id (iTerm GUID). Pure enrichment
+    /// over the mirror — see docs/hook-bridge-spec.md. `.unknown` when no signal.
+    var agentStates: [String: AgentStateEntry] = [:]
+    /// Fired when the aggregate "any session needs attention" changes, so the
+    /// menu-bar item can show/hide its dot without polling.
+    var onAttentionChange: ((Bool) -> Void)?
+    /// Every session GUID/tty we've ever discovered — the anti-spoof allowlist that
+    /// also lets frames correlate while the panel (and its fresh session list) is closed.
+    private var knownSessionIDs: Set<String> = []
+    private var ttyToSessionID: [String: String] = [:]
+    private var lastAttention = false
+
     let adapter: any TargetAdapter
     private var streamTask: Task<Void, Never>?
     private var streamGeneration = 0
@@ -87,6 +99,7 @@ final class AppModel {
         do {
             try await adapter.connect()
             let discovered = try await adapter.discover()
+            rememberIdentities(discovered)
             // Pin the last-used session to the top so it's immediately visible.
             if let last = lastUsedSessionID, let idx = discovered.firstIndex(where: { $0.id == last }) {
                 var reordered = discovered
@@ -199,6 +212,10 @@ final class AppModel {
             justSent = true
             messageText = ""
             statusMessage = "Sent to \(selectedSession?.folderName ?? "session")"
+            // We just gave this session work → it's busy again. Clears any prior
+            // "needs you"/"done" badge (and the menu-bar dot) until the next hook event.
+            agentStates[sessionID] = AgentStateEntry(state: .working, lastEventAt: Date())
+            notifyAttention()
         } catch {
             connectionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
@@ -222,5 +239,54 @@ final class AppModel {
     func teardown() {
         streamTask?.cancel()
         streamTask = nil
+    }
+
+    // MARK: - Hook-derived agent state (enrichment over the mirror)
+
+    /// The push-hook state for a session, or `.unknown` if no signal yet.
+    func agentState(for sessionID: String) -> AgentState {
+        agentStates[sessionID]?.state ?? .unknown
+    }
+
+    /// True when any tracked session is finished/waiting — drives the menu-bar dot.
+    var anyNeedsAttention: Bool {
+        agentStates.values.contains { $0.state.needsAttention }
+    }
+
+    /// Records identities so later hook frames can correlate (and to gate spoofed
+    /// frames to sessions we've actually seen).
+    private func rememberIdentities(_ sessions: [TerminalSession]) {
+        for s in sessions {
+            knownSessionIDs.insert(s.id)
+            if !s.tty.isEmpty { ttyToSessionID[s.tty] = s.id }
+        }
+    }
+
+    /// Seeds identities without disturbing UI — used at launch / on enable so the
+    /// menu-bar badge can light up before the panel is ever opened.
+    func seedIdentities() async {
+        do {
+            try await adapter.connect()
+            rememberIdentities(try await adapter.discover())
+        } catch { /* best effort — correlation simply waits for the next discovery */ }
+    }
+
+    /// Applies one decoded hook frame. Drops frames that don't correlate to a known
+    /// session (anti-spoof) or carry an unrecognized event (schema drift).
+    func applyHookFrame(_ frame: HookFrame) {
+        guard let id = HookCorrelator.sessionID(
+            for: frame, knownIDs: knownSessionIDs, ttyToID: ttyToSessionID),
+              let state = AgentState.from(event: frame.event) else { return }
+        agentStates[id] = AgentStateEntry(
+            state: state, lastEventAt: Date(), message: frame.claudePayload?.message)
+        notifyAttention()
+    }
+
+    private func notifyAttention() {
+        let now = anyNeedsAttention
+        if now != lastAttention {
+            lastAttention = now
+            onAttentionChange?(now)
+        }
     }
 }

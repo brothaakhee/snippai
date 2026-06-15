@@ -9,9 +9,11 @@ import SwiftUI
 final class SettingsController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private let store: ShortcutStore
+    private let hooks: HookController
 
-    init(store: ShortcutStore) {
+    init(store: ShortcutStore, hooks: HookController) {
         self.store = store
+        self.hooks = hooks
     }
 
     func show() {
@@ -21,7 +23,7 @@ final class SettingsController: NSObject, NSWindowDelegate {
             return
         }
         NSApp.setActivationPolicy(.regular)
-        let hosting = NSHostingController(rootView: SettingsView(store: store, onDone: { [weak self] in
+        let hosting = NSHostingController(rootView: SettingsView(store: store, hooks: hooks, onDone: { [weak self] in
             self?.close()
         }))
         let window = NSWindow(contentViewController: hosting)
