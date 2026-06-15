@@ -36,6 +36,22 @@ final class HookFrameTests: XCTestCase {
         XCTAssertEqual(payload.message, "needs permission")
     }
 
+    /// Locks in the REAL claude 2.1.177 Stop payload shape (captured live). Extra
+    /// fields (permission_mode, effort, last_assistant_message, …) must be ignored,
+    /// not cause a decode failure — schema additions should degrade gracefully.
+    func testDecodesRealClaudeStopPayloadIgnoringExtraFields() throws {
+        let real = #"""
+        {"session_id":"d86b0e0d-d9da-4b40-9ade-c7a358c82c3e","transcript_path":"/Users/x/.claude/projects/p/d86b0e0d.jsonl","cwd":"/private/var/tmp/proj","permission_mode":"auto","effort":{"level":"high"},"hook_event_name":"Stop","stop_hook_active":false,"last_assistant_message":"pong","background_tasks":[],"session_crons":[]}
+        """#
+        let b64 = Data(real.utf8).base64EncodedString()
+        let frame = HookFrame(event: "Stop", payloadB64: b64)
+        let payload = try XCTUnwrap(frame.claudePayload)
+        XCTAssertEqual(payload.sessionID, "d86b0e0d-d9da-4b40-9ade-c7a358c82c3e")
+        XCTAssertEqual(payload.cwd, "/private/var/tmp/proj")
+        XCTAssertEqual(payload.hookEventName, "Stop")
+        XCTAssertNil(payload.message)   // Stop carries no message; Notification does
+    }
+
     func testBadBase64PayloadDegradesToNil() {
         let frame = HookFrame(event: "Stop", payloadB64: "!!!not base64!!!")
         XCTAssertNil(frame.claudePayload)

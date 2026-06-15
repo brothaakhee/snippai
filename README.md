@@ -111,6 +111,7 @@ A native Swift app, no Python runtime. `SnippAIKit` is the engine (iTerm client 
 - **Capture** — Carbon global hotkey (default ⌥⌘4, no Accessibility needed) → full-screen crosshair overlay (dim + clear selection hole + live dimension badge) → ScreenCaptureKit region capture → PNG. Multi-display + retina aware. (`Sources/SnippAI/Capture/`)
 - **Panel** (SwiftUI in a floating `NSPanel`) — screenshot header, **session picker** with rich disambiguating labels (folder · job · window/tab/pane · last on-screen line, agent sessions badged), a **live terminal mirror** that renders the session's emulated cells with ANSI colors + the cursor, and a message input. (`Sources/SnippAI/Panel/`)
 - **Adapter abstraction + router** — `TargetAdapter` protocol with two live impls (iTerm2 native client, Terminal.app via AppleScript). `AdapterRouter` connects to whatever's running, merges discovered sessions into one picker (tagged by source), and routes send/stream/focus back to the owning adapter. Terminal.app has no event stream or per-cell color, so its mirror is plain text refreshed by polling — a fidelity tradeoff vs the native iTerm2 client. (The Claude desktop app was probed and rejected — see [Probed](#probed-the-claude-desktop-app-is-not-adaptable); a hosted PTY remains the v2 north star.)
+- **Claude Code status (hook bridge)** — an opt-in, **default-off** integration (Settings → "Claude Code status (beta)") that surfaces a *Done / Needs you* badge in the picker rows, the panel header, and a menu-bar dot, so you know when a session finished or is waiting — without parsing the mirror TUI. A POSIX shell hook merged into `~/.claude/settings.json` (backup + idempotent + one-click uninstall) pipes one JSON line per `Stop`/`Notification` event to an in-app **AF_UNIX socket** via `nc -U`; the hook is **non-blocking + fail-open** (always `exit 0`, never blocks Claude) and ships **no compiled binary**. Frames correlate to the exact iTerm pane via `ITERM_SESSION_ID` (its GUID *is* the session id) and are dropped if they don't match a known session (anti-spoof). Pure enrichment layered over the live mirror — reverse-engineered from Vibe Island, then scoped down via an adversarial design debate. (`Sources/SnippAIKit/Hooks/`, `Sources/SnippAI/Hooks/`; design: [`docs/hook-bridge-spec.md`](./docs/hook-bridge-spec.md))
 
 ### Build & run the app
 ```bash
@@ -122,14 +123,15 @@ First run prompts for **Screen Recording** (capture) and **Automation → iTerm2
 ### Verifying without the GUI
 ```bash
 swift run iterm-spike              # native enumerate/send/stream against live iTerm, ALL GREEN ~22ms
-swift test                         # unit tests: RFC 6455 frame decoder + terminal-screen parser
+swift test                         # unit + integration: RFC 6455 frames, terminal-screen parser,
+                                   # hook frame/correlation/installer, real AF_UNIX socket round-trips
 ```
 
 ## Remaining / next steps
-- [ ] Hotkey rebinding UI + onboarding for the two TCC grants.
-- [ ] Picker live screen-preview thumbnails (current labels already disambiguate).
+- [x] Hotkey rebinding UI + onboarding for the two TCC grants.
 - [x] Terminal.app adapter (AppleScript) + multi-adapter router. _(Claude desktop app probed — not adaptable; see above.)_
-- [ ] v2 "host model" (own the PTY) → enables the native-chat Flavor B.
+- [x] Claude Code status hook bridge (Stop/Notification → in-panel "Done / Needs you" badge). _(Deferred by the design debate: blocking in-panel approvals, statusline usage scrape, a VS Code/Cursor focus extension, and the SSH-remote tunnel — see [`docs/hook-bridge-spec.md`](./docs/hook-bridge-spec.md).)_
+- [ ] Picker live screen-preview thumbnails (current labels already disambiguate).
 - [ ] v2 "host model" (own the PTY) → enables the native-chat Flavor B.
 
 ---
