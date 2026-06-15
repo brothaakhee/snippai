@@ -92,6 +92,25 @@ final class HookSocketServerTests: XCTestCase {
         wait(for: [exp], timeout: 3)
     }
 
+    func testStopThenRestartDeliversAgain() throws {
+        // Proves teardown is clean (the non-blocking accept loop doesn't park a
+        // thread on the fd): we can stop and rebind on the same path and still
+        // receive frames.
+        let exp = expectation(description: "frame after restart")
+        server = HookSocketServer(socketURL: socketURL) { _ in }
+        try server.start()
+        server.stop()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: socketURL.path),
+                       "stop() should unlink the socket file")
+
+        server = HookSocketServer(socketURL: socketURL) { frame in
+            XCTAssertEqual(frame.event, "Stop"); exp.fulfill()
+        }
+        try server.start()
+        try sendToSocket(socketURL.path, Array((#"{"v":1,"event":"Stop","iterm":"a:1"}"# + "\n").utf8))
+        wait(for: [exp], timeout: 3)
+    }
+
     func testStaleSocketFileIsReplacedOnStart() throws {
         // Leave a stale file where the socket should bind.
         FileManager.default.createFile(atPath: socketURL.path, contents: Data("stale".utf8))

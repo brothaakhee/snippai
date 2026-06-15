@@ -82,6 +82,7 @@ final class AppModel {
         pickerQuery = ""
         connectionError = nil
         await refreshSessions()   // sets selectedSessionID to an agent-preferred visible session
+        if ProcessInfo.processInfo.environment["SNIPPAI_DEMO_STATES"] == "1" { seedDemoStates() }
         let forcePicker = ProcessInfo.processInfo.environment["SNIPPAI_FORCE_PICKER"] == "1"
         // Auto-jump to composing only when the default target is an agent session;
         // otherwise show the picker (with that default highlighted for keyboard use).
@@ -99,7 +100,7 @@ final class AppModel {
         do {
             try await adapter.connect()
             let discovered = try await adapter.discover()
-            rememberIdentities(discovered)
+            observeDiscovered(discovered)
             // Pin the last-used session to the top so it's immediately visible.
             if let last = lastUsedSessionID, let idx = discovered.firstIndex(where: { $0.id == last }) {
                 var reordered = discovered
@@ -182,6 +183,7 @@ final class AppModel {
                 for await snapshot in stream {
                     guard let self, self.streamGeneration == generation else { return }
                     self.screen = snapshot
+                    self.reconcileStateWithMirror(sessionID: sessionID)
                 }
                 // Stream ended without an error → the connection dropped (e.g. iTerm
                 // restarted). Surface it instead of freezing on the last frame.
@@ -253,13 +255,34 @@ final class AppModel {
         agentStates.values.contains { $0.state.needsAttention }
     }
 
-    /// Records identities so later hook frames can correlate (and to gate spoofed
-    /// frames to sessions we've actually seen).
-    private func rememberIdentities(_ sessions: [TerminalSession]) {
-        for s in sessions {
-            knownSessionIDs.insert(s.id)
-            if !s.tty.isEmpty { ttyToSessionID[s.tty] = s.id }
+    /// Folds a fresh discovery into our identity maps and prunes dead state.
+    ///
+    /// - `knownSessionIDs` grows monotonically: GUIDs are unique and stable, so an
+    ///   ever-seen allowlist both gates spoofed frames and lets frames correlate
+    ///   while the panel (and its live session list) is closed.
+    /// - `ttyToSessionID` is REBUILT from the live set, because ttys are recycled —
+    ///   a stale tty→closed-session mapping would mis-correlate a reused tty.
+    /// - `agentStates` is pruned to live sessions so a finished/closed session can't
+    ///   keep the menu-bar attention dot lit forever.
+    private func observeDiscovered(_ discovered: [TerminalSession]) {
+        for s in discovered { knownSessionIDs.insert(s.id) }
+        ttyToSessionID = Dictionary(
+            discovered.compactMap { $0.tty.isEmpty ? nil : ($0.tty, $0.id) },
+            uniquingKeysWith: { _, latest in latest })
+        let liveIDs = Set(discovered.map { $0.id })
+        let before = agentStates.count
+        agentStates = agentStates.filter { liveIDs.contains($0.key) }
+        if agentStates.count != before { notifyAttention() }
+    }
+
+    /// Debug only (SNIPPAI_DEMO_STATES=1): paints a spread of agent states across the
+    /// discovered sessions so the badge UI can be screenshotted without a live Claude.
+    private func seedDemoStates() {
+        let demo: [AgentState] = [.waitingForInput, .finished, .working]
+        for (session, state) in zip(sessions, demo) {
+            agentStates[session.id] = AgentStateEntry(state: state, lastEventAt: Date())
         }
+        notifyAttention()
     }
 
     /// Seeds identities without disturbing UI — used at launch / on enable so the
@@ -267,7 +290,7 @@ final class AppModel {
     func seedIdentities() async {
         do {
             try await adapter.connect()
-            rememberIdentities(try await adapter.discover())
+            observeDiscovered(try await adapter.discover())
         } catch { /* best effort — correlation simply waits for the next discovery */ }
     }
 
@@ -288,5 +311,24 @@ final class AppModel {
             lastAttention = now
             onAttentionChange?(now)
         }
+    }
+
+    /// Fresh mirror output means Claude is doing something, so a prior "done"/"needs
+    /// you" badge has gone stale (e.g. the user answered a prompt directly in the
+    /// terminal). Clear it — but guardedly: a `.waitingForInput` prompt TUI repaints
+    /// (spinner/cursor) within milliseconds, so only treat output that arrives a
+    /// beat AFTER the event as real progress; `.finished` clears immediately since
+    /// nothing repaints after Stop.
+    private func reconcileStateWithMirror(sessionID: String) {
+        guard let entry = agentStates[sessionID] else { return }
+        let stale: Bool
+        switch entry.state {
+        case .finished: stale = true
+        case .waitingForInput: stale = Date().timeIntervalSince(entry.lastEventAt) > 2.0
+        case .working, .unknown: stale = false
+        }
+        guard stale else { return }
+        agentStates[sessionID] = AgentStateEntry(state: .working, lastEventAt: Date())
+        notifyAttention()
     }
 }

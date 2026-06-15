@@ -88,9 +88,18 @@ public final class HookSocketServer: @unchecked Sendable {
             let e = errno; close(fd); unlink(path); throw HookSocketError.listenFailed(e)
         }
 
+        // Non-blocking accept: the DispatchSource fires only when connections are
+        // pending, and acceptConnections() then drains until accept() returns
+        // -1/EWOULDBLOCK — so the accept queue is never parked inside a blocking
+        // accept() (which would leak the fd/thread on teardown).
+        _ = fcntl(fd, F_SETFL, O_NONBLOCK)
+
         listenFD = fd
         let src = DispatchSource.makeReadSource(fileDescriptor: fd, queue: acceptQueue)
-        src.setEventHandler { [weak self] in self?.acceptConnections() }
+        // Capture the fd locally (not via the shared `listenFD`) so the handler never
+        // races stop()'s write to that field. GCD serializes the cancel handler's
+        // close(fd) after any in-flight event handler on the same queue.
+        src.setEventHandler { [weak self] in self?.acceptConnections(fd: fd) }
         src.setCancelHandler { close(fd) }
         source = src
         src.resume()
@@ -105,11 +114,13 @@ public final class HookSocketServer: @unchecked Sendable {
 
     deinit { stop() }
 
-    private func acceptConnections() {
-        // Drain the accept backlog without blocking the accept queue on reads.
+    private func acceptConnections(fd: Int32) {
+        // Drain the backlog. The fd is non-blocking, so accept() returns
+        // -1/EWOULDBLOCK once no more connections are pending, ending the loop
+        // without parking the accept queue.
         while true {
-            let conn = accept(listenFD, nil, nil)
-            if conn < 0 { break }   // EWOULDBLOCK / no more pending connections
+            let conn = accept(fd, nil, nil)
+            if conn < 0 { break }
             readQueue.async { [weak self] in self?.readConnection(conn) }
         }
     }
