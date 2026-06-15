@@ -88,6 +88,16 @@ final class AppModel {
         // otherwise show the picker (with that default highlighted for keyboard use).
         if !forcePicker, let session = selectedSession, session.looksLikeAgent {
             startComposing(sessionID: session.id)
+            // Debug (SNIPPAI_DEMO_CYCLE=1): auto-cycle the target so the ⌘-arrow
+            // behavior + directional slide can be screenshotted without synthetic keys.
+            if ProcessInfo.processInfo.environment["SNIPPAI_DEMO_CYCLE"] == "1" {
+                Task { @MainActor in
+                    for _ in 0..<6 {
+                        try? await Task.sleep(nanoseconds: 1_300_000_000)
+                        cycleTarget(by: 1)
+                    }
+                }
+            }
         } else {
             phase = .picking
             pickerFocusToken += 1
@@ -164,6 +174,31 @@ final class AppModel {
     /// Clears the transient "Sent" confirmation (e.g. when the user starts typing again).
     func clearSentBadge() {
         if justSent { justSent = false; statusMessage = nil }
+    }
+
+    /// +1 when the last target change moved forward (⌘→/⌘↓), -1 backward — drives the
+    /// directional slide of the target header so the switch reads as left/right motion.
+    private(set) var cycleDirection = 1
+
+    /// 1-based position of the current target among all sessions, and the total —
+    /// shown as "n / total" next to the switch control so cycling is legible.
+    var targetPosition: (index: Int, total: Int)? {
+        guard let id = selectedSessionID, let idx = sessions.firstIndex(where: { $0.id == id })
+        else { return nil }
+        return (idx + 1, sessions.count)
+    }
+
+    /// Cycles the composing target through the discovered sessions (wrapping), used by
+    /// the ⌘+arrow shortcuts. Reuses `choose` so the mirror, header, and badge all
+    /// follow. No-op outside composing or with fewer than two sessions.
+    func cycleTarget(by delta: Int) {
+        guard phase == .composing, sessions.count > 1 else { return }
+        let ids = sessions.map(\.id)
+        let current = selectedSessionID.flatMap { ids.firstIndex(of: $0) } ?? 0
+        let next = cycledIndex(from: current, by: delta, count: ids.count)
+        guard ids[next] != selectedSessionID else { return }
+        cycleDirection = delta >= 0 ? 1 : -1
+        choose(sessionID: ids[next])
     }
 
     private func startComposing(sessionID: String) {

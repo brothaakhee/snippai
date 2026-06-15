@@ -121,31 +121,77 @@ private struct ComposeView: View {
 
     private var targetBar: some View {
         HStack(spacing: 8) {
-            Image(systemName: model.selectedSession?.looksLikeAgent == true ? "sparkles" : "terminal")
-                .foregroundStyle(model.selectedSession?.looksLikeAgent == true ? Color.accentColor : .secondary)
+            // The identity slides in from the side we're cycling toward, so a ⌘←/⌘→
+            // switch reads as directional motion. A constant-width, clipped container
+            // keeps the right-hand controls from reflowing as the name changes.
+            ZStack(alignment: .leading) {
+                targetIdentity(session: model.selectedSession, state: selectedAgentState)
+                    .id(model.selectedSessionID)
+                    .transition(identityTransition)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .clipped()
+            switchControls
+        }
+        .padding(.horizontal, PanelStyle.contentInset).padding(.vertical, 8)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: model.selectedSessionID)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(targetBarAccessibilityLabel)
+    }
+
+    private var selectedAgentState: AgentState {
+        model.selectedSessionID.map { model.agentState(for: $0) } ?? .unknown
+    }
+
+    private func targetIdentity(session: TerminalSession?, state: AgentState) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: session?.looksLikeAgent == true ? "sparkles" : "terminal")
+                .foregroundStyle(session?.looksLikeAgent == true ? Color.accentColor : .secondary)
                 .scaledFont(12)
             VStack(alignment: .leading, spacing: 0) {
-                Text(model.selectedSession?.folderName ?? "session")
+                Text(session?.folderName ?? "session")
                     .scaledFont(12, weight: .semibold)
-                Text(model.selectedSession?.disambiguator ?? "")
+                    .lineLimit(1)
+                Text(session?.disambiguator ?? "")
                     .scaledFont(10).foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
             // A live-mirror indicator so the terminal's liveness is legible.
             LiveDot()
-            // Hook-derived semantic state (Done / Needs you), when known. Pure
-            // enrichment alongside the live mirror.
-            if let id = model.selectedSessionID {
-                AgentStateBadge(state: model.agentState(for: id))
+            // Hook-derived semantic state (Done / Needs you), when known.
+            AgentStateBadge(state: state)
+        }
+    }
+
+    @ViewBuilder
+    private var switchControls: some View {
+        HStack(spacing: 8) {
+            if let pos = model.targetPosition, pos.total > 1 {
+                Text("\(pos.index)/\(pos.total)")
+                    .scaledFont(10, weight: .medium).monospacedDigit()
+                    .foregroundStyle(.tertiary)
+                    .contentTransition(.numericText())
+                    .accessibilityHidden(true)
+                Text("⌘ ←→")
+                    .scaledFont(10, design: .rounded)
+                    .foregroundStyle(.tertiary)
+                    .help("Switch target: ⌘← previous · ⌘→ next")
+                    .accessibilityHidden(true)
             }
-            Spacer()
             Button("Change") { model.backToPicker() }
                 .scaledFont(11)
                 .buttonStyle(.borderless)
                 .accessibilityHint("Pick a different session")
         }
-        .padding(.horizontal, PanelStyle.contentInset).padding(.vertical, 8)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(targetBarAccessibilityLabel)
+        .fixedSize()
+    }
+
+    private var identityTransition: AnyTransition {
+        if reduceMotion { return .opacity }
+        let forward = model.cycleDirection >= 0
+        return .asymmetric(
+            insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
+            removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity))
     }
 
     private var targetBarAccessibilityLabel: String {
@@ -177,7 +223,8 @@ private struct ComposeView: View {
                                  onCancel: { model.backToPicker() },
                                  onFocusChange: { focused in
                                      withAnimation(.easeInOut(duration: 0.15)) { inputFocused = focused }
-                                 })
+                                 },
+                                 onCycleTarget: { model.cycleTarget(by: $0) })
                         .frame(minHeight: inputMinHeight, maxHeight: inputMaxHeight)
                         .fixedSize(horizontal: false, vertical: true)
                         // Only treat genuine user typing (non-empty) as dismissing
