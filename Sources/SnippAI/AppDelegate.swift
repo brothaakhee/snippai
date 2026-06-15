@@ -8,11 +8,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let captureController = CaptureController()
     private let onboarding = OnboardingController()
     private let shortcutStore = ShortcutStore()
-    private lazy var settings = SettingsController(store: shortcutStore)
+    private lazy var hookController = HookController(model: model)
+    private lazy var settings = SettingsController(store: shortcutStore, hooks: hookController)
     private var statusItem: NSStatusItem?
     private var captureMenuItem: NSMenuItem?
     private var hotKey: HotKey?
     private var isCapturing = false
+
+    /// A small colored dot overlaid on the menu-bar icon when a tracked session
+    /// needs attention (finished / waiting). A subview keeps the base symbol a
+    /// template that still adapts to the menu bar's appearance.
+    private lazy var attentionDot: NSView = {
+        let v = NSView(frame: NSRect(x: 0, y: 0, width: 6, height: 6))
+        v.wantsLayer = true
+        v.layer?.backgroundColor = NSColor.systemOrange.cgColor
+        v.layer?.cornerRadius = 3
+        v.isHidden = true
+        return v
+    }()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -30,6 +43,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         onboarding.shortcutDisplayProvider = { [weak self] in
             self?.shortcutStore.combo.displayString ?? "⌥⌘4"
         }
+
+        // Light up the menu-bar dot when a tracked session needs attention, and
+        // bring the hook listener back if the user enabled it previously.
+        model.onAttentionChange = { [weak self] needs in self?.updateAttentionDot(needs) }
+        hookController.startIfEnabled()
 
         // Debug: self-test the ScreenCaptureKit path on an explicit global rect.
         if let spec = ProcessInfo.processInfo.environment["SNIPPAI_TEST_CAPTURE"] {
@@ -89,6 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let button = item.button {
             button.image = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "SnippAI")
             button.image?.isTemplate = true
+            button.addSubview(attentionDot)
         }
         let menu = NSMenu()
         let captureItem = NSMenuItem(title: captureMenuTitle, action: #selector(menuCapture), keyEquivalent: "")
@@ -115,6 +134,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var captureMenuTitle: String { "Capture & Send  (\(shortcutStore.combo.displayString))" }
 
     private func refreshCaptureMenuTitle() { captureMenuItem?.title = captureMenuTitle }
+
+    /// Shows/hides the attention dot at the top-right of the menu-bar icon.
+    private func updateAttentionDot(_ needs: Bool) {
+        attentionDot.isHidden = !needs
+        if needs, let b = statusItem?.button {
+            attentionDot.frame.origin = NSPoint(x: b.bounds.width - 8, y: b.bounds.height - 8)
+        }
+    }
 
     @objc private func menuCapture() { beginCapture() }
 

@@ -105,7 +105,8 @@ struct SessionPickerView: View {
                     LazyVStack(spacing: 6) {
                         ForEach(results) { session in
                             SessionRow(session: session, query: model.pickerQuery,
-                                       isSelected: session.id == model.selectedSessionID) {
+                                       isSelected: session.id == model.selectedSessionID,
+                                       state: model.agentState(for: session.id)) {
                                 model.choose(sessionID: session.id)
                             }
                             .id(session.id)
@@ -135,6 +136,7 @@ private struct SessionRow: View {
     let session: TerminalSession
     var query: String = ""
     let isSelected: Bool
+    var state: AgentState = .unknown
     let action: () -> Void
     @State private var hovering = false
     @ScaledMetric(relativeTo: .body) private var iconWidth: CGFloat = 18
@@ -189,6 +191,8 @@ private struct SessionRow: View {
                     }
                 }
                 Spacer(minLength: 0)
+                AgentStateBadge(state: state, showsLabel: false)
+                    .padding(.top, 1)
             }
             .padding(10)
             .background(
@@ -243,6 +247,7 @@ private struct SessionRow: View {
     private var accessibilityLabel: String {
         var parts = [session.folderName]
         if session.looksLikeAgent { parts.append("AI agent, \(session.jobName)") }
+        if state.isVisible { parts.append(state.label) }
         parts.append(session.disambiguator)
         return parts.joined(separator: ", ")
     }

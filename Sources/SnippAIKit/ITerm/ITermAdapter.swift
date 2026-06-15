@@ -38,10 +38,11 @@ public actor ITermAdapter: TargetAdapter {
                 group.addTask {
                     var session = stub
                     let vars = (try? await client.variables(
-                        sessionID: stub.id, names: ["path", "autoName", "jobName"])) ?? [:]
+                        sessionID: stub.id, names: ["path", "autoName", "jobName", "tty"])) ?? [:]
                     session.cwd = vars["path"] ?? ""
                     session.title = vars["autoName"] ?? ""
                     session.jobName = vars["jobName"] ?? ""
+                    session.tty = vars["tty"] ?? ""
                     if let screen = try? await client.screenContents(sessionID: stub.id) {
                         session.lastLine = TerminalScreenParser.parse(screen).lastNonEmptyLine ?? ""
                     }

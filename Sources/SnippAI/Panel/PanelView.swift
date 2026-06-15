@@ -132,6 +132,11 @@ private struct ComposeView: View {
             }
             // A live-mirror indicator so the terminal's liveness is legible.
             LiveDot()
+            // Hook-derived semantic state (Done / Needs you), when known. Pure
+            // enrichment alongside the live mirror.
+            if let id = model.selectedSessionID {
+                AgentStateBadge(state: model.agentState(for: id))
+            }
             Spacer()
             Button("Change") { model.backToPicker() }
                 .scaledFont(11)
@@ -140,7 +145,16 @@ private struct ComposeView: View {
         }
         .padding(.horizontal, PanelStyle.contentInset).padding(.vertical, 8)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Sending to \(model.selectedSession?.folderName ?? "session"), live")
+        .accessibilityLabel(targetBarAccessibilityLabel)
+    }
+
+    private var targetBarAccessibilityLabel: String {
+        var label = "Sending to \(model.selectedSession?.folderName ?? "session"), live"
+        if let id = model.selectedSessionID {
+            let state = model.agentState(for: id)
+            if state.isVisible { label += ", \(state.label)" }
+        }
+        return label
     }
 
     private var inputBar: some View {
