@@ -4,7 +4,7 @@ import SwiftUI
 /// gates (Screen Recording + iTerm2 control) so the first capture can't silently fail.
 struct OnboardingView: View {
     @Bindable var model: OnboardingModel
-    var shortcutDisplay: String = "⌥⌘4"
+    var shortcutDisplay: String = "⌥⇧4"
     var onDone: () -> Void
 
     var body: some View {

@@ -41,7 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return ok
         }
         onboarding.shortcutDisplayProvider = { [weak self] in
-            self?.shortcutStore.combo.displayString ?? "⌥⌘4"
+            self?.shortcutStore.combo.displayString ?? "⌥⇧4"
         }
 
         // Light up the menu-bar dot when a tracked session needs attention, and

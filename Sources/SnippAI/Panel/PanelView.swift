@@ -47,7 +47,7 @@ private struct TitleBar: View {
             return "→ \(session.folderName)"
         }
         if model.screenshotURL != nil { return "Choose a session to send to" }
-        return "Press ⌥⌘4 to capture"
+        return "Press ⌥⇧4 to capture"
     }
 
     var body: some View {

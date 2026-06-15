@@ -151,7 +151,7 @@ struct SettingsView: View {
 
     private var footer: some View {
         HStack {
-            Text("Use ⌘, ⌃, or ⌥ with any key. ⌥⌘4 is the default.")
+            Text("Use ⌘, ⌃, or ⌥ with any key. ⌥⇧4 is the default.")
                 .scaledFont(11).foregroundStyle(.secondary)
             Spacer()
             Button("Done", action: onDone).keyboardShortcut(.defaultAction)

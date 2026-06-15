@@ -11,7 +11,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
     private var activationObserver: NSObjectProtocol?
 
     /// Supplies the current capture-shortcut glyphs for the "All set" footer line.
-    var shortcutDisplayProvider: () -> String = { "⌥⌘4" }
+    var shortcutDisplayProvider: () -> String = { "⌥⇧4" }
 
     var isReady: Bool { model.snapshot.allReady }
 
