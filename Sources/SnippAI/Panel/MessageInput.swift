@@ -1,6 +1,6 @@
 import SwiftUI
 import AppKit
-import Carbon.HIToolbox
+import SnippAIKit
 
 /// A multi-line message field with chat-style submit semantics:
 /// **Return = send**, **Shift+Return = newline**. SwiftUI's `TextEditor` can't do
@@ -78,15 +78,16 @@ private final class SubmitTextView: NSTextView {
     var onCycleTarget: (Int) -> Void = { _ in }
 
     // ⌘+arrow cycles the target instead of moving the caret to line/document ends.
-    // Scoped to exactly ⌘ (no ⌥/⌃) so ⌥-word and plain-arrow caret motion are intact.
+    // NB: arrow keys also carry .function/.numericPad, so we must check the four
+    // real modifiers individually — not compare the whole mask to .command.
     override func keyDown(with event: NSEvent) {
-        let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        if mods == .command {
-            switch Int(event.keyCode) {
-            case kVK_RightArrow, kVK_DownArrow: onCycleTarget(1); return
-            case kVK_LeftArrow, kVK_UpArrow: onCycleTarget(-1); return
-            default: break
-            }
+        let m = event.modifierFlags
+        if let delta = targetCycleDelta(
+            keyCode: Int(event.keyCode),
+            command: m.contains(.command), option: m.contains(.option),
+            control: m.contains(.control), shift: m.contains(.shift)) {
+            onCycleTarget(delta)
+            return
         }
         super.keyDown(with: event)
     }
