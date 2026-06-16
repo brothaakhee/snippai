@@ -26,6 +26,11 @@ final class AppModel {
     var isSending = false
     var isLoadingSessions = false
     var justSent = false
+    /// Bumped when the user sends, so the mirror snaps to the tail to show the result.
+    private(set) var mirrorScrollTick = 0
+    /// Key the mirror uses to decide when to force-scroll to the bottom (session
+    /// switch or a fresh send) vs. follow-only-if-at-bottom during live updates.
+    var mirrorScrollKey: String { "\(selectedSessionID ?? "")#\(mirrorScrollTick)" }
 
     /// Push-hook-derived agent state per session id (iTerm GUID). Pure enrichment
     /// over the mirror — see docs/hook-bridge-spec.md. `.unknown` when no signal.
@@ -84,12 +89,14 @@ final class AppModel {
         messageText = ""
         pickerQuery = ""
         connectionError = nil
-        await refreshSessions()   // sets selectedSessionID to an agent-preferred visible session
+        await refreshSessions()   // sets selectedSessionID to the last-used / preferred session
         if ProcessInfo.processInfo.environment["SNIPPAI_DEMO_STATES"] == "1" { seedDemoStates() }
         let forcePicker = ProcessInfo.processInfo.environment["SNIPPAI_FORCE_PICKER"] == "1"
-        // Auto-jump to composing only when the default target is an agent session;
-        // otherwise show the picker (with that default highlighted for keyboard use).
-        if !forcePicker, let session = selectedSession, session.looksLikeAgent {
+        // Always drop straight into the terminal for the resolved target (the
+        // last-used session, per refreshSessions' selection) to cut steps — even if
+        // it isn't obviously an agent. The picker only appears when there's nothing
+        // to target. Switch later via ⌘-arrow or "Change".
+        if !forcePicker, let session = selectedSession {
             startComposing(sessionID: session.id)
             // Debug (SNIPPAI_DEMO_CYCLE=1): auto-cycle the target so the ⌘-arrow
             // behavior + directional slide can be screenshotted without synthetic keys.
@@ -255,6 +262,7 @@ final class AppModel {
             try await adapter.send(text: composed, toSession: sessionID)
             justSent = true
             messageText = ""
+            mirrorScrollTick += 1   // snap the mirror to the tail to show the result
             statusMessage = "Sent to \(selectedSession?.folderName ?? "session")"
             // We just gave this session work → it's busy again. Clears any prior
             // "needs you"/"done" badge (and the menu-bar dot) until the next hook event.

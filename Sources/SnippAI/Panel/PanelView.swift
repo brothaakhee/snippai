@@ -104,7 +104,7 @@ private struct ComposeView: View {
             targetBar
             // The mirror is an inset, rounded "screen" rather than a full-bleed
             // opaque slab butting against the material — no bracketing dividers.
-            TerminalMirrorView(screen: model.screen)
+            TerminalMirrorView(screen: model.screen, scrollKey: model.mirrorScrollKey)
                 .clipShape(RoundedRectangle(cornerRadius: PanelStyle.controlRadius))
                 .overlay(RoundedRectangle(cornerRadius: PanelStyle.controlRadius)
                     .strokeBorder(.white.opacity(0.06), lineWidth: 1))

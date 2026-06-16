@@ -9,7 +9,17 @@ import SnippAIKit
 /// a monospaced terminal mirror.
 struct TerminalMirrorView: NSViewRepresentable {
     let screen: TerminalScreen
+    /// Changes when the user does something that should snap the mirror to the
+    /// bottom regardless of prior scroll position — switching target sessions, or
+    /// sending a message. Plain live updates keep "follow only if already at bottom".
+    var scrollKey: String = ""
     @ScaledMetric(relativeTo: .body) private var fontSize: CGFloat = 12
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator {
+        var lastScrollKey: String?
+    }
 
     func makeNSView(context: Context) -> NSScrollView {
         let textView = NSTextView()
@@ -40,10 +50,23 @@ struct TerminalMirrorView: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let textView = scroll.documentView as? NSTextView else { return }
         let attr = Self.attributed(screen, fontSize: fontSize)
-        let wasAtBottom = isScrolledToBottom(scroll)
+        // Force a snap to the bottom when the session changed or a message was just
+        // sent; otherwise follow the tail only if the user was already at the bottom
+        // (so reading scrollback isn't yanked away by live updates).
+        let forced = context.coordinator.lastScrollKey != scrollKey
+        context.coordinator.lastScrollKey = scrollKey
+        let shouldStick = forced || isScrolledToBottom(scroll)
         textView.textStorage?.setAttributedString(attr)
-        // Follow the tail (like a live terminal) unless the user scrolled up.
-        if wasAtBottom { textView.scrollToEndOfDocument(nil) }
+        guard shouldStick else { return }
+        // NSTextView lays out lazily, so the document height is stale right after
+        // replacing the text — force layout before scrolling, then scroll again on
+        // the next runloop in case layout finalized afterwards (else the scroll
+        // lands short of the real bottom, the bug being fixed here).
+        if let lm = textView.layoutManager, let tc = textView.textContainer {
+            lm.ensureLayout(for: tc)
+        }
+        textView.scrollToEndOfDocument(nil)
+        DispatchQueue.main.async { [weak textView] in textView?.scrollToEndOfDocument(nil) }
     }
 
     private func isScrolledToBottom(_ scroll: NSScrollView) -> Bool {
