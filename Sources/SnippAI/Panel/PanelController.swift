@@ -9,13 +9,41 @@ final class KeyablePanel: NSPanel {
 }
 
 @MainActor
-final class PanelController {
+final class PanelController: NSObject, NSWindowDelegate {
     private var panel: KeyablePanel?
     private let model: AppModel
     private var onClose: () -> Void = {}
 
+    private static let widthKey = "panelWidth"
+    private static let heightKey = "panelHeight"
+    private static let defaultSize = NSSize(width: 420, height: 560)
+    private static let minSize = NSSize(width: 360, height: 360)
+
     init(model: AppModel) {
         self.model = model
+        super.init()
+    }
+
+    /// The persisted panel size, clamped to the minimum (and sane defaults on first run).
+    private var savedSize: NSSize {
+        let d = UserDefaults.standard
+        guard d.object(forKey: Self.widthKey) != nil else { return Self.defaultSize }
+        return NSSize(
+            width: max(Self.minSize.width, CGFloat(d.double(forKey: Self.widthKey))),
+            height: max(Self.minSize.height, CGFloat(d.double(forKey: Self.heightKey))))
+    }
+
+    /// Persist the panel's size after the user finishes a drag-resize, so it's
+    /// restored next time the panel opens.
+    nonisolated func windowDidEndLiveResize(_ notification: Notification) {
+        // AppKit delivers window-delegate callbacks on the main thread. Read our own
+        // panel (Sendable via @MainActor self) rather than the non-Sendable notification.
+        MainActor.assumeIsolated {
+            guard let size = panel?.frame.size else { return }
+            let d = UserDefaults.standard
+            d.set(Double(size.width), forKey: Self.widthKey)
+            d.set(Double(size.height), forKey: Self.heightKey)
+        }
     }
 
     func show(besideSelection rect: CGRect? = nil, onClose: @escaping () -> Void) {
@@ -37,10 +65,13 @@ final class PanelController {
             self?.onClose()
         }))
         hosting.sizingOptions = []
+        let size = savedSize
         let panel = KeyablePanel(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 560),
-            styleMask: [.borderless, .nonactivatingPanel, .titled, .fullSizeContentView],
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless, .nonactivatingPanel, .titled, .fullSizeContentView, .resizable],
             backing: .buffered, defer: false)
+        panel.minSize = Self.minSize
+        panel.delegate = self
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = true

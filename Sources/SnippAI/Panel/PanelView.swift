@@ -19,7 +19,9 @@ struct PanelView: View {
                 ComposeView(model: model)
             }
         }
-        .frame(width: 420, height: 560)
+        // Fill the (resizable) window rather than a fixed size, so dragging the
+        // panel wider reveals more of the terminal mirror's width.
+        .frame(minWidth: 360, maxWidth: .infinity, minHeight: 360, maxHeight: .infinity)
         .background(background)
         .clipShape(RoundedRectangle(cornerRadius: PanelStyle.panelRadius))
         .overlay(RoundedRectangle(cornerRadius: PanelStyle.panelRadius).strokeBorder(.white.opacity(0.08), lineWidth: 1))
