@@ -7,7 +7,7 @@
 <meta name="description" content="A native macOS app that fires a screenshot + your message straight into the Claude Code session you're already running. One hotkey, one screen, no alt-tab." />
 
 <!-- ───────────────────────────────────────────────────────────────────────
-     PLACEHOLDERS to fill before launch (search "EDIT:"):
+     PLACEHOLDERS to fill before launch (search "EDIT-"):
        EDIT-DOWNLOAD  → the real download URL (GitHub Release .dmg/.zip)
        EDIT-PRICE     → the one-time unlock price
        EDIT-VIDEO     → swap the .video-frame placeholder for a <video>/embed
@@ -16,463 +16,353 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 
 <style>
 :root{
-  --bg:#0a0b0d; --bg2:#0e1014; --surface:#15181e; --surface2:#1b1f27;
-  --line:#23272f; --line2:#2d323c;
-  --ink:#ECEAE3; --muted:#9aa1ab; --faint:#666d77;
-  --mint:#5EE6A0; --mint-dim:#2f6f52; --amber:#FFB45A; --red:#FF6B6B; --blue:#7CC3FF;
-  --display:"Bricolage Grotesque",sans-serif;
+  --bg:#0a0a0b; --card:#101012; --card2:#141416;
+  --line:#1d1d20; --line2:#26262a;
+  --ink:#f2f2f0; --muted:#8b8b90; --faint:#5d5d63;
+  --mint:#5fe3a1; --mint-dim:#2c6b4d; --amber:#ffb45a;
   --body:"Hanken Grotesk",sans-serif;
   --mono:"JetBrains Mono",ui-monospace,monospace;
-  --maxw:1120px;
+  --maxw:980px;
   --ease:cubic-bezier(.2,.7,.2,1);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
 body{
   background:var(--bg); color:var(--ink); font-family:var(--body);
-  font-size:17px; line-height:1.6; -webkit-font-smoothing:antialiased;
-  overflow-x:hidden; position:relative;
+  font-size:16.5px; line-height:1.65; -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
 }
-/* film grain + vignette atmosphere */
-body::before{
-  content:""; position:fixed; inset:0; z-index:9999; pointer-events:none; opacity:.035;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-body::after{
-  content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
-  background:
-    radial-gradient(900px 500px at 78% -8%, rgba(94,230,160,.10), transparent 60%),
-    radial-gradient(700px 500px at 8% 8%, rgba(124,195,255,.06), transparent 55%);
-}
-a{color:inherit; text-decoration:none}
-.wrap{max-width:var(--maxw); margin-inline:auto; padding-inline:28px}
-.mono{font-family:var(--mono)}
-.tick{font-family:var(--mono); font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:var(--faint)}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:var(--maxw); margin-inline:auto; padding-inline:24px}
+.center{text-align:center}
 
 /* ── NAV ───────────────────────────────────────────────────── */
-header{position:sticky; top:0; z-index:100; backdrop-filter:blur(14px);
-  background:linear-gradient(var(--bg), rgba(10,11,13,.72)); border-bottom:1px solid transparent}
+header{position:sticky; top:0; z-index:100; backdrop-filter:blur(12px);
+  background:rgba(10,10,11,.7); border-bottom:1px solid transparent; transition:border-color .3s}
 header.scrolled{border-bottom-color:var(--line)}
-.nav{display:flex; align-items:center; justify-content:space-between; height:68px}
-.brand{display:flex; align-items:center; gap:11px; font-family:var(--display); font-weight:800; font-size:19px; letter-spacing:-.01em}
-.glyph{width:30px; height:30px; border-radius:8px; background:linear-gradient(150deg,#1c2027,#0d0f13);
-  border:1px solid var(--line2); display:grid; place-items:center; box-shadow:0 1px 0 rgba(255,255,255,.05) inset}
-.glyph svg{width:17px; height:17px}
-.nav-links{display:flex; align-items:center; gap:30px}
-.nav-links a{font-size:14.5px; color:var(--muted); transition:color .2s}
+.nav{display:flex; align-items:center; justify-content:space-between; height:64px}
+.brand{display:flex; align-items:center; gap:10px; font-family:var(--mono); font-weight:700; font-size:16px; letter-spacing:-.02em}
+.glyph{width:26px;height:26px;border-radius:7px;background:#141416;border:1px solid var(--line2);display:grid;place-items:center}
+.glyph svg{width:15px;height:15px}
+.nav-links{display:flex; align-items:center; gap:26px}
+.nav-links a{font-size:14px; color:var(--muted); transition:color .2s}
 .nav-links a:hover{color:var(--ink)}
-.nav-cta{font-family:var(--mono); font-size:13px; font-weight:500; color:var(--bg);
-  background:var(--mint); padding:9px 16px; border-radius:8px; transition:transform .15s var(--ease), box-shadow .2s}
-.nav-cta:hover{transform:translateY(-1px); box-shadow:0 6px 22px rgba(94,230,160,.25)}
-@media(max-width:720px){.nav-links a:not(.nav-cta){display:none}}
+.nav-cta{font-family:var(--mono); font-size:13px; color:var(--bg); background:var(--ink); padding:8px 15px; border-radius:8px; transition:opacity .2s}
+.nav-cta:hover{opacity:.85}
+@media(max-width:680px){.nav-links a:not(.nav-cta){display:none}}
 
 /* ── HERO ──────────────────────────────────────────────────── */
-.hero{position:relative; padding:64px 0 40px}
-.hero-grid{display:grid; grid-template-columns:1.04fr .96fr; gap:54px; align-items:center}
-@media(max-width:920px){.hero-grid{grid-template-columns:1fr; gap:40px}}
-.badge-row{display:inline-flex; align-items:center; gap:9px; padding:6px 12px 6px 8px;
-  border:1px solid var(--line2); border-radius:999px; background:var(--surface);
-  font-size:13px; color:var(--muted); margin-bottom:26px}
-.badge-row .dot{width:7px; height:7px; border-radius:50%; background:var(--mint); box-shadow:0 0 0 0 rgba(94,230,160,.5); animation:pulse 2.4s infinite}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(94,230,160,.45)}70%{box-shadow:0 0 0 7px rgba(94,230,160,0)}100%{box-shadow:0 0 0 0 rgba(94,230,160,0)}}
-h1{font-family:var(--display); font-weight:800; font-size:clamp(40px,5.6vw,66px); line-height:1.02; letter-spacing:-.025em}
+.hero{padding:96px 0 60px; text-align:center}
+.eyebrow{font-family:var(--mono); font-size:13px; color:var(--muted); border:1px solid var(--line2);
+  padding:6px 13px; border-radius:999px; display:inline-flex; align-items:center; gap:8px; margin-bottom:34px}
+.eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--mint)}
+h1{font-family:var(--mono); font-weight:700; font-size:clamp(31px,5.2vw,52px); line-height:1.16;
+  letter-spacing:-.03em; max-width:16ch; margin-inline:auto}
 h1 .accent{color:var(--mint)}
-h1 em{font-style:normal; position:relative; white-space:nowrap}
-h1 em::after{content:""; position:absolute; left:-2px; right:-2px; bottom:6px; height:11px; background:rgba(94,230,160,.16); z-index:-1; border-radius:2px}
-.sub{margin-top:22px; font-size:19px; color:var(--muted); max-width:30em}
-.sub b{color:var(--ink); font-weight:600}
-.cta-row{margin-top:34px; display:flex; align-items:center; gap:16px; flex-wrap:wrap}
-.btn-primary{display:inline-flex; align-items:center; gap:11px; background:var(--ink); color:var(--bg);
-  font-weight:600; font-size:16px; padding:14px 22px; border-radius:11px; transition:transform .15s var(--ease), box-shadow .25s}
-.btn-primary svg{width:17px;height:17px}
-.btn-primary:hover{transform:translateY(-2px); box-shadow:0 14px 40px rgba(236,234,227,.16)}
-.cta-meta{font-family:var(--mono); font-size:12.5px; color:var(--faint); line-height:1.5}
-.cta-meta b{color:var(--mint); font-weight:500}
-.hero-kbd{margin-top:30px; display:flex; align-items:center; gap:12px; color:var(--faint); font-size:13.5px}
-kbd{font-family:var(--mono); font-size:12.5px; background:var(--surface2); border:1px solid var(--line2);
-  border-bottom-width:2px; border-radius:6px; padding:3px 8px; color:var(--ink)}
+.sub{margin:26px auto 0; max-width:54ch; font-size:18px; color:var(--muted)}
+.sub b{color:var(--ink); font-weight:500}
+.cta{margin-top:38px; display:flex; gap:14px; justify-content:center; align-items:center; flex-wrap:wrap}
+.btn{display:inline-flex; align-items:center; gap:9px; font-size:15px; padding:12px 20px; border-radius:10px; transition:transform .15s var(--ease), opacity .2s, border-color .2s}
+.btn svg{width:16px;height:16px}
+.btn-fill{background:var(--ink); color:var(--bg); font-weight:600}
+.btn-fill:hover{transform:translateY(-1px)}
+.btn-ghost{color:var(--muted); border:1px solid var(--line2)}
+.btn-ghost:hover{color:var(--ink); border-color:var(--faint)}
+.hero-meta{margin-top:18px; font-family:var(--mono); font-size:12.5px; color:var(--faint)}
+.hero-meta b{color:var(--muted); font-weight:400}
 
-/* staggered reveal */
-.reveal{opacity:0; transform:translateY(14px); animation:rise .8s var(--ease) forwards}
-@keyframes rise{to{opacity:1; transform:none}}
-.d1{animation-delay:.05s}.d2{animation-delay:.13s}.d3{animation-delay:.21s}.d4{animation-delay:.29s}.d5{animation-delay:.37s}.d6{animation-delay:.46s}
-
-/* ── CAPTURE CROSSHAIR FRAME (the signature motif) ─────────── */
-.capture{position:relative; padding:30px}
-.marquee{position:absolute; inset:0; border:1.5px dashed var(--mint); border-radius:6px; opacity:.6;
-  animation:march 18s linear infinite, draw .9s var(--ease) both .3s}
-@keyframes march{to{background-position:200px 0}}
-@keyframes draw{from{clip-path:inset(50% 50% 50% 50%); opacity:0}to{clip-path:inset(0 0 0 0); opacity:.6}}
-.corner{position:absolute; width:20px; height:20px; border:2px solid var(--mint)}
-.corner.tl{top:-2px;left:-2px;border-right:0;border-bottom:0}
-.corner.tr{top:-2px;right:-2px;border-left:0;border-bottom:0}
-.corner.bl{bottom:-2px;left:-2px;border-right:0;border-top:0}
-.corner.br{bottom:-2px;right:-2px;border-left:0;border-top:0}
-.dim-badge{position:absolute; top:-13px; right:14px; font-family:var(--mono); font-size:11px;
-  background:var(--mint); color:var(--bg); padding:2px 8px; border-radius:5px; font-weight:700}
-
-/* ── THE PANEL MOCK ────────────────────────────────────────── */
-.panel{background:rgba(21,24,30,.86); backdrop-filter:blur(12px); border:1px solid var(--line2);
-  border-radius:15px; box-shadow:0 30px 80px -20px rgba(0,0,0,.7), 0 1px 0 rgba(255,255,255,.05) inset;
-  overflow:hidden; font-size:13px}
-.panel-bar{display:flex; align-items:center; gap:9px; padding:11px 13px; border-bottom:1px solid var(--line)}
+/* ── HERO SHOT ─────────────────────────────────────────────── */
+.shot{margin-top:64px; position:relative}
+.shot::before{content:""; position:absolute; inset:-40px -60px auto; height:340px; z-index:-1;
+  background:radial-gradient(60% 100% at 50% 0%, rgba(95,227,161,.10), transparent 70%)}
+.panel{max-width:560px; margin-inline:auto; background:#101216; border:1px solid var(--line2);
+  border-radius:14px; overflow:hidden; text-align:left; font-size:12.5px;
+  box-shadow:0 40px 90px -30px rgba(0,0,0,.8)}
+.pbar{display:flex; align-items:center; gap:9px; padding:11px 13px; border-bottom:1px solid var(--line)}
 .thumbs{display:flex; gap:5px}
-.thumb{width:40px; height:28px; border-radius:5px; border:1px solid var(--line2); background-size:cover; background-position:center}
-.thumb.t1{background:linear-gradient(135deg,#2a3340,#0e1116)}
-.thumb.t2{background:linear-gradient(135deg,#3a2a40,#140e16)}
-.thumb-add{width:22px; height:28px; border:1px dashed var(--line2); border-radius:5px; display:grid; place-items:center; color:var(--faint)}
-.panel-bar .title{font-family:var(--display); font-weight:700; font-size:14px; margin-left:2px}
-.panel-bar .sub2{color:var(--faint); font-size:11px; font-family:var(--mono)}
-.panel-bar .x{margin-left:auto; width:22px; height:22px; border-radius:50%; background:rgba(255,255,255,.06); display:grid; place-items:center; color:var(--muted); font-size:11px}
-.target{display:flex; align-items:center; gap:8px; padding:9px 13px; border-bottom:1px solid var(--line); font-size:12px}
-.spark{color:var(--mint)}
-.target .name{font-weight:600}
-.target .meta{color:var(--faint); font-family:var(--mono); font-size:11px}
-.live{width:6px;height:6px;border-radius:50%;background:var(--mint);animation:pulse 2s infinite; margin-left:2px}
-.pill{margin-left:auto; display:flex; align-items:center; gap:8px}
-.state{display:inline-flex; align-items:center; gap:5px; font-family:var(--mono); font-size:10.5px; font-weight:600;
-  padding:2px 8px; border-radius:999px}
-.state.done{color:var(--mint); background:rgba(94,230,160,.13)}
-.state.need{color:var(--amber); background:rgba(255,180,90,.14)}
-.cyc{color:var(--faint); font-family:var(--mono); font-size:11px}
-.change{color:var(--blue); font-size:11px}
-.mirror{background:#08090b; padding:13px 15px; font-family:var(--mono); font-size:11.5px; line-height:1.75; color:#c8ccd2; min-height:150px}
-.mirror .g{color:var(--mint)} .mirror .a{color:var(--amber)} .mirror .m{color:var(--faint)} .mirror .b{color:var(--blue)}
-.mirror .cursor{display:inline-block;width:7px;height:14px;background:var(--mint);vertical-align:-2px;animation:blink 1.1s steps(1) infinite}
+.thumb{width:38px;height:27px;border-radius:5px;border:1px solid var(--line2)}
+.thumb.a{background:linear-gradient(135deg,#28313d,#0e1116)} .thumb.b{background:linear-gradient(135deg,#382838,#140e16)}
+.tadd{width:21px;height:27px;border:1px dashed var(--line2);border-radius:5px;display:grid;place-items:center;color:var(--faint)}
+.pbar .nm{font-family:var(--mono);font-weight:700;font-size:13px}
+.pbar .s2{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.pbar .x{margin-left:auto;color:var(--faint)}
+.ptarget{display:flex;align-items:center;gap:7px;padding:9px 13px;border-bottom:1px solid var(--line);font-size:12px}
+.ptarget .sp{color:var(--mint)} .ptarget .nm{font-weight:600}
+.ptarget .mt{color:var(--faint);font-family:var(--mono);font-size:10.5px}
+.state{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;font-weight:600;padding:2px 8px;border-radius:999px}
+.state.need{color:var(--amber);background:rgba(255,180,90,.12)}
+.mir{background:#08090b;padding:13px 15px;font-family:var(--mono);font-size:11px;line-height:1.8;color:#c4c8ce}
+.mir .g{color:var(--mint)} .mir .a{color:var(--amber)} .mir .m{color:var(--faint)} .mir .b{color:#7cc3ff}
+.mir .cur{display:inline-block;width:6px;height:13px;background:var(--mint);vertical-align:-2px;animation:blink 1.1s steps(1) infinite}
 @keyframes blink{50%{opacity:0}}
-.input{display:flex; align-items:center; gap:9px; padding:11px 13px}
-.input .box{flex:1; background:rgba(255,255,255,.05); border:1px solid var(--line2); border-radius:9px; padding:9px 11px; color:var(--faint); font-size:12.5px}
-.input .send{width:30px;height:30px;border-radius:50%;background:var(--mint);color:var(--bg);display:grid;place-items:center}
-.input .send svg{width:14px;height:14px}
-.grip{position:absolute; bottom:8px; right:8px; width:14px; height:14px; opacity:.5}
+.pin{display:flex;align-items:center;gap:9px;padding:11px 13px}
+.pin .bx{flex:1;background:rgba(255,255,255,.04);border:1px solid var(--line2);border-radius:8px;padding:8px 11px;color:var(--faint);font-size:12px}
+.pin .snd{width:28px;height:28px;border-radius:50%;background:var(--mint);color:var(--bg);display:grid;place-items:center}
+.pin .snd svg{width:13px;height:13px}
 
-/* ── SECTION SCAFFOLD ──────────────────────────────────────── */
-section{padding:88px 0; position:relative}
-.sec-head{max-width:640px; margin-bottom:48px}
-.sec-head .tick{display:block; margin-bottom:14px}
-.sec-head h2{font-family:var(--display); font-weight:800; font-size:clamp(30px,3.8vw,44px); line-height:1.06; letter-spacing:-.02em}
-.sec-head p{margin-top:16px; color:var(--muted); font-size:18px}
-.rule{height:1px; background:linear-gradient(90deg, var(--line2), transparent); border:0}
+/* ── SECTION ───────────────────────────────────────────────── */
+section{padding:80px 0}
+.sec-title{font-family:var(--mono); font-weight:700; font-size:clamp(24px,3.4vw,34px); letter-spacing:-.02em; line-height:1.2}
+.sec-sub{margin:14px auto 0; max-width:48ch; color:var(--muted); font-size:16.5px}
+.eyebrow-sm{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-bottom:16px}
 
-/* ── VIDEO SLOT ────────────────────────────────────────────── */
-.video-frame{position:relative; border:1px solid var(--line2); border-radius:16px; overflow:hidden;
-  background:radial-gradient(120% 140% at 50% 0%, #14181f, #0a0c10);
-  aspect-ratio:16/9; display:grid; place-items:center; cursor:pointer; transition:border-color .3s}
+/* ── VIDEO ─────────────────────────────────────────────────── */
+.video-frame{margin-top:46px; position:relative; border:1px solid var(--line2); border-radius:14px;
+  overflow:hidden; aspect-ratio:16/9; background:#0d0d0f; display:grid; place-items:center; cursor:pointer; transition:border-color .25s}
 .video-frame:hover{border-color:var(--mint-dim)}
-.video-frame::before{content:""; position:absolute; inset:0;
-  background-image:linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
-  background-size:42px 42px; opacity:.18; mask-image:radial-gradient(70% 70% at 50% 50%, #000, transparent)}
-.play{position:relative; z-index:2; display:flex; flex-direction:column; align-items:center; gap:18px; color:var(--muted)}
-.play-btn{width:78px; height:78px; border-radius:50%; background:rgba(94,230,160,.12); border:1px solid var(--mint-dim);
-  display:grid; place-items:center; transition:transform .2s var(--ease), background .2s}
-.video-frame:hover .play-btn{transform:scale(1.06); background:rgba(94,230,160,.2)}
-.play-btn svg{width:26px; height:26px; margin-left:4px; fill:var(--mint)}
-.play .label{font-family:var(--mono); font-size:13px; letter-spacing:.04em}
-.video-tag{position:absolute; top:14px; left:14px; z-index:2; font-family:var(--mono); font-size:11px; color:var(--faint);
-  border:1px solid var(--line2); padding:3px 9px; border-radius:6px; background:rgba(0,0,0,.4)}
+.video-frame::before{content:"";position:absolute;inset:0;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:40px 40px;opacity:.15;mask-image:radial-gradient(70% 70% at 50% 50%,#000,transparent)}
+.play{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:16px;color:var(--muted)}
+.play-btn{width:70px;height:70px;border-radius:50%;background:rgba(95,227,161,.1);border:1px solid var(--mint-dim);display:grid;place-items:center;transition:transform .2s var(--ease)}
+.video-frame:hover .play-btn{transform:scale(1.05)}
+.play-btn svg{width:24px;height:24px;margin-left:4px;fill:var(--mint)}
+.play .lbl{font-family:var(--mono);font-size:12.5px}
+.video-tag{position:absolute;top:13px;left:13px;z-index:2;font-family:var(--mono);font-size:11px;color:var(--faint);border:1px solid var(--line2);padding:3px 9px;border-radius:6px;background:rgba(0,0,0,.4)}
 
-/* ── STEPS ─────────────────────────────────────────────────── */
-.steps{display:grid; grid-template-columns:repeat(3,1fr); gap:24px}
-@media(max-width:820px){.steps{grid-template-columns:1fr}}
-.step{position:relative; padding:26px; border:1px solid var(--line); border-radius:14px; background:linear-gradient(180deg,var(--surface),var(--bg2))}
-.step .num{font-family:var(--mono); font-size:12px; color:var(--mint); border:1px solid var(--mint-dim); width:30px;height:30px;border-radius:8px;display:grid;place-items:center; margin-bottom:18px}
-.step h3{font-family:var(--display); font-weight:700; font-size:20px; margin-bottom:8px}
-.step p{color:var(--muted); font-size:15.5px}
-.step .kb{margin-top:14px}
+/* ── FEATURE GRID (understated cards) ──────────────────────── */
+.grid{margin-top:48px; display:grid; grid-template-columns:repeat(3,1fr); gap:14px}
+@media(max-width:820px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:540px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:24px 22px; transition:border-color .25s, background .25s}
+.card:hover{border-color:var(--line2); background:var(--card2)}
+.card .ic{width:34px;height:34px;border-radius:9px;background:#17171a;border:1px solid var(--line2);display:grid;place-items:center;color:var(--muted);margin-bottom:16px}
+.card .ic svg{width:17px;height:17px}
+.card h3{font-family:var(--mono);font-weight:500;font-size:15px;margin-bottom:7px}
+.card p{color:var(--muted);font-size:14.5px;line-height:1.55}
+.card .bd{margin-top:11px;display:flex;gap:6px}
+.state.done{color:var(--mint);background:rgba(95,227,161,.12)}
 
-/* ── FEATURES ──────────────────────────────────────────────── */
-.feat{display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:16px; overflow:hidden}
-@media(max-width:820px){.feat{grid-template-columns:1fr}}
-.cell{background:var(--bg2); padding:30px 26px; transition:background .25s}
-.cell:hover{background:var(--surface)}
-.cell .ic{width:38px;height:38px;border-radius:10px;background:var(--surface2);border:1px solid var(--line2);display:grid;place-items:center;margin-bottom:18px;color:var(--mint)}
-.cell .ic svg{width:19px;height:19px}
-.cell h3{font-family:var(--display); font-weight:700; font-size:18px; margin-bottom:7px}
-.cell p{color:var(--muted); font-size:15px}
-.cell .badges{margin-top:12px; display:flex; gap:7px}
+/* ── COMPAT ROW ────────────────────────────────────────────── */
+.compat{margin-top:42px; display:grid; grid-template-columns:1fr 1fr; gap:14px}
+@media(max-width:600px){.compat{grid-template-columns:1fr}}
+.crow{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px}
+.crow .t{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.crow h3{font-family:var(--mono);font-weight:500;font-size:16px}
+.tag{font-family:var(--mono);font-size:10.5px;padding:3px 9px;border-radius:6px}
+.tag.full{color:var(--mint);background:rgba(95,227,161,.1);border:1px solid var(--mint-dim)}
+.tag.basic{color:var(--amber);background:rgba(255,180,90,.1);border:1px solid #6b5326}
+.crow p{color:var(--muted);font-size:14px}
+.reqs{margin-top:24px;font-family:var(--mono);font-size:12.5px;color:var(--faint);text-align:center}
+.reqs span{margin:0 12px;white-space:nowrap}
+.reqs b{color:var(--muted);font-weight:400}
 
-/* ── COMPAT ────────────────────────────────────────────────── */
-.compat{display:grid; grid-template-columns:1fr 1fr; gap:24px}
-@media(max-width:720px){.compat{grid-template-columns:1fr}}
-.compat-card{border:1px solid var(--line); border-radius:14px; padding:26px; background:var(--bg2)}
-.compat-card .top{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px}
-.compat-card h3{font-family:var(--display); font-weight:700; font-size:21px}
-.tag{font-family:var(--mono); font-size:11px; padding:3px 9px; border-radius:6px}
-.tag.full{color:var(--mint); background:rgba(94,230,160,.12); border:1px solid var(--mint-dim)}
-.tag.basic{color:var(--amber); background:rgba(255,180,90,.12); border:1px solid #6b5326}
-.compat-card p{color:var(--muted); font-size:15px}
-.req{margin-top:26px; font-family:var(--mono); font-size:13px; color:var(--faint); display:flex; gap:22px; flex-wrap:wrap}
-.req b{color:var(--muted); font-weight:500}
+/* ── FAQ ───────────────────────────────────────────────────── */
+.faq{max-width:680px;margin:44px auto 0}
+details{border-bottom:1px solid var(--line)}
+summary{list-style:none;cursor:pointer;padding:20px 4px;display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:16px;color:var(--ink);transition:color .2s}
+summary::-webkit-details-marker{display:none}
+summary:hover{color:var(--mint)}
+summary .pm{font-family:var(--mono);color:var(--faint);transition:transform .2s,color .2s;flex:none}
+details[open] summary .pm{transform:rotate(45deg);color:var(--mint)}
+details p{padding:0 4px 22px;color:var(--muted);font-size:15px;max-width:60ch}
 
-/* ── PRICING ───────────────────────────────────────────────── */
-.price-wrap{display:flex; justify-content:center}
-.price{position:relative; max-width:430px; width:100%; border:1px solid var(--line2); border-radius:18px;
-  background:linear-gradient(180deg,var(--surface),var(--bg2)); padding:38px 34px; text-align:center;
-  box-shadow:0 30px 70px -30px rgba(94,230,160,.18)}
-.price::before{content:""; position:absolute; inset:-1px; border-radius:18px; padding:1px; pointer-events:none;
-  background:linear-gradient(160deg, rgba(94,230,160,.5), transparent 40%); -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude}
-.price .trial{display:inline-block; font-family:var(--mono); font-size:12px; color:var(--mint); border:1px solid var(--mint-dim); padding:5px 12px; border-radius:999px; margin-bottom:22px}
-.price .amt{font-family:var(--display); font-weight:800; font-size:60px; letter-spacing:-.03em; line-height:1}
-.price .amt span{font-size:20px; color:var(--muted); font-weight:500}
-.price .once{font-family:var(--mono); font-size:13px; color:var(--faint); margin-top:6px}
-.price ul{list-style:none; text-align:left; margin:26px 0; display:grid; gap:11px}
-.price li{display:flex; gap:11px; align-items:flex-start; font-size:15px; color:var(--muted)}
-.price li svg{width:17px;height:17px;flex:none;margin-top:3px;color:var(--mint)}
-.price .btn-primary{background:var(--mint); width:100%; justify-content:center; margin-top:4px}
-.price .btn-primary:hover{box-shadow:0 14px 40px rgba(94,230,160,.3)}
+/* ── PRICING / CTA ─────────────────────────────────────────── */
+.final{text-align:center; padding:96px 0 80px}
+.amt{font-family:var(--mono);font-weight:700;font-size:46px;letter-spacing:-.03em;margin:18px 0 4px}
+.amt span{font-size:17px;color:var(--muted);font-weight:400}
+.final .meta{font-family:var(--mono);font-size:13px;color:var(--faint);margin-bottom:30px}
+.final .meta b{color:var(--mint);font-weight:400}
 
 /* ── FOOTER ────────────────────────────────────────────────── */
-footer{border-top:1px solid var(--line); padding:46px 0 60px; margin-top:30px}
-.foot{display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap; color:var(--faint); font-size:14px}
-.foot .brand{font-size:16px}
+footer{border-top:1px solid var(--line);padding:40px 0}
+.foot{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;color:var(--faint);font-size:13.5px;font-family:var(--mono)}
 .foot a{color:var(--muted)} .foot a:hover{color:var(--ink)}
-.foot-links{display:flex; gap:24px; font-size:14px}
+.foot-links{display:flex;gap:22px}
 
-@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
 
-<!-- icon glyph reused -->
-<svg width="0" height="0" style="position:absolute"><symbol id="mark" viewBox="0 0 24 24" fill="none" stroke="#5EE6A0" stroke-width="2" stroke-linecap="round">
+<svg width="0" height="0" style="position:absolute"><symbol id="mark" viewBox="0 0 24 24" fill="none" stroke="#5fe3a1" stroke-width="2" stroke-linecap="round">
   <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><circle cx="12" cy="12" r="3"/>
 </symbol></svg>
 
 <header id="top">
   <div class="wrap nav">
-    <a class="brand" href="#top">
-      <span class="glyph"><svg><use href="#mark"/></svg></span> SnippAI
-    </a>
+    <a class="brand" href="#top"><span class="glyph"><svg><use href="#mark"/></svg></span> SnippAI</a>
     <nav class="nav-links">
-      <a href="#how">How it works</a>
       <a href="#features">Features</a>
-      <a href="#compat">Terminals</a>
+      <a href="#terminals">Terminals</a>
+      <a href="#faq">FAQ</a>
       <a href="#pricing">Pricing</a>
       <!-- EDIT-DOWNLOAD -->
-      <a class="nav-cta" href="#download">Download</a>
+      <a class="nav-cta" href="#pricing">Download</a>
     </nav>
   </div>
 </header>
 
 <!-- ── HERO ─────────────────────────────────────────────────── -->
-<section class="hero">
-  <div class="wrap hero-grid">
-    <div class="hero-copy">
-      <div class="badge-row reveal d1"><span class="dot"></span> Native macOS · for Claude Code</div>
-      <!-- EDIT-TAGLINE -->
-      <h1 class="reveal d2">Screenshot <span class="accent">→</span> Claude,<br/>in <em>one step</em>.</h1>
-      <p class="sub reveal d3">You spot a bug, grab a screenshot, and it lands <b>straight in the Claude Code session you're already running</b> — with your message attached. No alt-tab, no paste, no second window.</p>
-      <div class="cta-row reveal d4">
-        <!-- EDIT-DOWNLOAD -->
-        <a class="btn-primary" href="#download">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v11m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>
-          Download for macOS
-        </a>
-        <div class="cta-meta">Free 7-day trial.<br/><b>One-time unlock</b> — no subscription.</div>
-      </div>
-      <div class="hero-kbd reveal d5">
-        Press <kbd>⌥</kbd> <kbd>⇧</kbd> <kbd>4</kbd> anywhere to capture &amp; send.
-      </div>
-    </div>
+<section class="hero wrap">
+  <span class="eyebrow"><span class="dot"></span> Native macOS · for Claude Code</span>
+  <!-- EDIT-TAGLINE -->
+  <h1>Screenshot, straight into <span class="accent">Claude Code</span></h1>
+  <p class="sub">You spot a bug, grab a screenshot, and it lands <b>right in the Claude Code session you're already running</b> — with your message attached. No alt-tab, no paste.</p>
+  <div class="cta">
+    <!-- EDIT-DOWNLOAD -->
+    <a class="btn btn-fill" href="#pricing">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v11m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>
+      Download for macOS
+    </a>
+    <a class="btn btn-ghost" href="#features">See features</a>
+  </div>
+  <div class="hero-meta">Free 7-day trial · <b>one-time unlock, no subscription</b> · ⌥⇧4 to capture</div>
 
-    <!-- the capture motif framing the panel mock -->
-    <div class="capture reveal d4">
-      <div class="marquee"></div>
-      <span class="corner tl"></span><span class="corner tr"></span>
-      <span class="corner bl"></span><span class="corner br"></span>
-      <span class="dim-badge">642 × 540</span>
-
-      <div class="panel">
-        <div class="panel-bar">
-          <div class="thumbs">
-            <div class="thumb t1"></div><div class="thumb t2"></div><div class="thumb-add">+</div>
-          </div>
-          <div>
-            <div class="title">SnippAI</div>
-            <div class="sub2">→ api-server</div>
-          </div>
-          <div class="x">✕</div>
-        </div>
-        <div class="target">
-          <span class="spark">✦</span>
-          <span class="name">api-server</span>
-          <span class="meta">iTerm2 · claude · win 0·tab 2</span>
-          <span class="live"></span>
-          <span class="pill">
-            <span class="state need">● Needs you</span>
-            <span class="cyc">2/3 ⌘←→</span>
-            <span class="change">Change</span>
-          </span>
-        </div>
-        <div class="mirror">
-          <div><span class="g">✓</span> Read <span class="b">Variables.tsx</span> <span class="m">(ctrl+o to expand)</span></div>
-          <div><span class="m">●</span> The screenshot shows the env var panel — 33 service</div>
-          <div>&nbsp;&nbsp;variables. I'll wire the database connection next.</div>
-          <div>&nbsp;</div>
-          <div><span class="a">⚠</span> <span class="a">Permission</span> — run <span class="b">npm run db:push</span>? <span class="cursor"></span></div>
-          <div>&nbsp;</div>
-          <div><span class="m">▶▶ auto mode on (shift+tab to cycle)</span></div>
-        </div>
-        <div class="input">
-          <div class="box">Tell Claude what to do…</div>
-          <div class="send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
-        </div>
-        <svg class="grip" viewBox="0 0 14 14" stroke="#666d77" stroke-width="1.4" stroke-linecap="round"><path d="M13 5L5 13M13 9l-4 4"/></svg>
+  <!-- product shot -->
+  <div class="shot">
+    <div class="panel">
+      <div class="pbar">
+        <div class="thumbs"><div class="thumb a"></div><div class="thumb b"></div><div class="tadd">+</div></div>
+        <div><div class="nm">SnippAI</div><div class="s2">→ api-server</div></div>
+        <div class="x">✕</div>
+      </div>
+      <div class="ptarget">
+        <span class="sp">✦</span><span class="nm">api-server</span>
+        <span class="mt">iTerm2 · claude · win 0·tab 2</span>
+        <span class="state need">● Needs you</span>
+      </div>
+      <div class="mir">
+        <div><span class="g">✓</span> Read <span class="b">Variables.tsx</span> <span class="m">(ctrl+o to expand)</span></div>
+        <div><span class="m">●</span> The screenshot shows the env-var panel — 33 service</div>
+        <div>&nbsp;&nbsp;variables. I'll wire the database connection next.</div>
+        <div>&nbsp;</div>
+        <div><span class="a">⚠</span> <span class="a">Permission</span> — run <span class="b">npm run db:push</span>? <span class="cur"></span></div>
+      </div>
+      <div class="pin">
+        <div class="bx">Tell Claude what to do…</div>
+        <div class="snd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
       </div>
     </div>
   </div>
 </section>
 
 <!-- ── VIDEO ────────────────────────────────────────────────── -->
-<section id="watch">
-  <div class="wrap">
-    <div class="sec-head" style="margin-inline:auto;text-align:center">
-      <span class="tick">// see it move</span>
-      <h2>Twenty seconds, start to finish.</h2>
-    </div>
-    <!-- EDIT-VIDEO: replace this .video-frame with a <video controls poster="…"> or an embed -->
-    <div class="video-frame" role="button" aria-label="Play demo video">
-      <span class="video-tag mono">demo.mp4 · coming soon</span>
-      <div class="play">
-        <div class="play-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
-        <span class="label">Capture → type → fire into Claude</span>
-      </div>
+<section class="wrap center" id="watch">
+  <div class="eyebrow-sm">See it move</div>
+  <div class="sec-title">Twenty seconds, start to finish</div>
+  <!-- EDIT-VIDEO: replace .video-frame with a <video controls poster> or embed -->
+  <div class="video-frame" role="button" aria-label="Play demo video">
+    <span class="video-tag">demo.mp4 · coming soon</span>
+    <div class="play">
+      <div class="play-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+      <span class="lbl">Capture → type → fire into Claude</span>
     </div>
   </div>
 </section>
-
-<!-- ── HOW IT WORKS ─────────────────────────────────────────── -->
-<section id="how">
-  <div class="wrap">
-    <div class="sec-head">
-      <span class="tick">// the loop</span>
-      <h2>One hotkey. One screen. Zero context-switch.</h2>
-      <p>SnippAI owns the capture and talks to your terminal directly — so the panel appears instantly with the pixels already in hand.</p>
-    </div>
-    <div class="steps">
-      <div class="step">
-        <div class="num">01</div>
-        <h3>Drag a region</h3>
-        <p>Hit the hotkey, drag a crosshair over the bug. Captured natively with ScreenCaptureKit — retina &amp; multi-display aware.</p>
-        <div class="kb"><kbd>⌥</kbd> <kbd>⇧</kbd> <kbd>4</kbd></div>
-      </div>
-      <div class="step">
-        <div class="num">02</div>
-        <h3>The panel appears</h3>
-        <p>A floating panel opens onto your live session — a faithful mirror of the terminal, spinners and all. Stack more shots with the same key.</p>
-      </div>
-      <div class="step">
-        <div class="num">03</div>
-        <h3>Type &amp; fire</h3>
-        <p>Write your message, press Return. Your text + the screenshot path go straight into the <em>existing</em> Claude session. Watch it work, right there.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<hr class="rule"/>
 
 <!-- ── FEATURES ─────────────────────────────────────────────── -->
-<section id="features">
-  <div class="wrap">
-    <div class="sec-head">
-      <span class="tick">// built for the flow</span>
-      <h2>It augments your session — it never replaces it.</h2>
-      <p>No new terminal to adopt, no second process. Your panel and your terminal are two windows onto the same live session.</p>
+<section class="wrap center" id="features">
+  <div class="eyebrow-sm">Capture · Send · Watch</div>
+  <div class="sec-title">It augments your session — never replaces it</div>
+  <p class="sec-sub">No new terminal to adopt, no second process. Your panel and your terminal are two windows onto the same live session.</p>
+  <div class="grid">
+    <div class="card">
+      <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 9h4M7 13h2"/></svg></div>
+      <h3>Live terminal mirror</h3>
+      <p>The real emulated screen with ANSI colors and the cursor — not a screenshot. Type in the panel or in iTerm; both stay in sync.</p>
     </div>
-    <div class="feat">
-      <div class="cell">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 9h4M7 13h2"/></svg></div>
-        <h3>Live terminal mirror</h3>
-        <p>The real emulated screen with ANSI colors and the cursor — not a screenshot. Type in the panel or in iTerm; both stay in sync.</p>
-      </div>
-      <div class="cell">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="13" height="10" rx="1.5"/><rect x="8" y="9" width="13" height="10" rx="1.5"/></svg></div>
-        <h3>Multiple screenshots</h3>
-        <p>Stack several captures into one prompt — compare designs, pair an error with its code. Curate them in a removable strip, send together.</p>
-      </div>
-      <div class="cell">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l-3 6 3 6M15 6l3 6-3 6"/></svg></div>
-        <h3>⌘-arrow target cycling</h3>
-        <p>Many sessions in one repo? Flick between targets with ⌘← / ⌘→ — a smooth, directional switch, no picker round-trip.</p>
-      </div>
-      <div class="cell">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></div>
-        <h3>Status that finds you</h3>
-        <p>A menu-bar dot and in-panel badge light up when Claude <span style="color:var(--mint)">finished</span> or <span style="color:var(--amber)">needs you</span> — look-away friendly, opt-in, fail-open.</p>
-        <div class="badges"><span class="state done">● Done</span><span class="state need">● Needs you</span></div>
-      </div>
-      <div class="cell">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></div>
-        <h3>Resizable, remembered</h3>
-        <p>Drag the corner to fit wider terminal output; it remembers your size. Rebind the hotkey to anything you like.</p>
-      </div>
-      <div class="cell">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></div>
-        <h3>Instant &amp; native</h3>
-        <p>Swift + AppKit, no Electron, no Python runtime. The tunnel round-trips in ~20ms — it feels like part of macOS because it is.</p>
-      </div>
+    <div class="card">
+      <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="13" height="10" rx="1.5"/><rect x="8" y="9" width="13" height="10" rx="1.5"/></svg></div>
+      <h3>Multiple screenshots</h3>
+      <p>Stack several captures into one prompt — pair an error with its code. Curate them in a removable strip, send together.</p>
+    </div>
+    <div class="card">
+      <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l-3 6 3 6M15 6l3 6-3 6"/></svg></div>
+      <h3>⌘-arrow cycling</h3>
+      <p>Many sessions in one repo? Flick between targets with ⌘← / ⌘→ — a smooth, directional switch, no picker round-trip.</p>
+    </div>
+    <div class="card">
+      <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></div>
+      <h3>Status that finds you</h3>
+      <p>A menu-bar dot and in-panel badge light up when Claude finished or needs you. Opt-in, fail-open.</p>
+      <div class="bd"><span class="state done">● Done</span><span class="state need">● Needs you</span></div>
+    </div>
+    <div class="card">
+      <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg></div>
+      <h3>Instant &amp; native</h3>
+      <p>Swift + AppKit. No Electron, no Python runtime. The tunnel round-trips in about 20ms — it feels like part of macOS.</p>
+    </div>
+    <div class="card">
+      <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></div>
+      <h3>Resizable &amp; rebindable</h3>
+      <p>Drag the corner to fit wider output; it remembers your size. Rebind the capture hotkey to whatever you like.</p>
     </div>
   </div>
 </section>
 
-<!-- ── COMPAT ───────────────────────────────────────────────── -->
-<section id="compat">
-  <div class="wrap">
-    <div class="sec-head">
-      <span class="tick">// works with</span>
-      <h2>Your terminal, where it already is.</h2>
+<!-- ── TERMINALS ────────────────────────────────────────────── -->
+<section class="wrap center" id="terminals">
+  <div class="eyebrow-sm">Works with</div>
+  <div class="sec-title">Your terminal, where it already is</div>
+  <div class="compat">
+    <div class="crow">
+      <div class="t"><h3>iTerm2</h3><span class="tag full">Full fidelity</span></div>
+      <p>The first-class experience: a true live, event-driven mirror with color and cursor, ⌘-arrow cycling, and status badges.</p>
     </div>
-    <div class="compat">
-      <div class="compat-card">
-        <div class="top"><h3>iTerm2</h3><span class="tag full">Full fidelity</span></div>
-        <p>The first-class experience: a true live, event-driven mirror with color and cursor, ⌘-arrow cycling, and Claude-status badges.</p>
-      </div>
-      <div class="compat-card">
-        <div class="top"><h3>Terminal.app</h3><span class="tag basic">Supported</span></div>
-        <p>Discover, send, focus, and a polled plain-text mirror. Color and cursor are iTerm-only — a deliberate fidelity tradeoff.</p>
-      </div>
+    <div class="crow">
+      <div class="t"><h3>Terminal.app</h3><span class="tag basic">Supported</span></div>
+      <p>Discover, send, focus, and a polled plain-text mirror. Color and cursor are iTerm-only — a deliberate tradeoff.</p>
     </div>
-    <div class="req">
-      <span><b>Requires</b> macOS 14 Sonoma or later</span>
-      <span><b>iTerm2</b> Python API enabled (one-time toggle)</span>
-      <span><b>Grants</b> Screen Recording + Automation</span>
-    </div>
+  </div>
+  <div class="reqs">
+    <span><b>Requires</b> macOS 14+</span><span><b>iTerm2</b> Python API (one toggle)</span><span><b>Grants</b> Screen Recording · Automation</span>
   </div>
 </section>
 
-<hr class="rule"/>
+<!-- ── FAQ ──────────────────────────────────────────────────── -->
+<section class="wrap center" id="faq">
+  <div class="eyebrow-sm">Questions</div>
+  <div class="sec-title">Good to know</div>
+  <div class="faq center" style="text-align:left">
+    <details open>
+      <summary>Does it work with my existing Claude Code session? <span class="pm">+</span></summary>
+      <p>Yes — that's the whole point. SnippAI is a second window onto the session you're already running, not a new process. Type in the panel or in your terminal; they stay in sync.</p>
+    </details>
+    <details>
+      <summary>Which terminals are supported? <span class="pm">+</span></summary>
+      <p>iTerm2 (full fidelity — live color mirror, cycling, status badges) and Terminal.app (basic — send, focus, and a polled plain-text mirror). More terminals may come later.</p>
+    </details>
+    <details>
+      <summary>Do I need to set anything up? <span class="pm">+</span></summary>
+      <p>On first run SnippAI asks for Screen Recording and Automation, and you enable iTerm2's Python API once (Settings → General → Magic). After that, just press the hotkey.</p>
+    </details>
+    <details>
+      <summary>Does my data leave my machine? <span class="pm">+</span></summary>
+      <p>No. SnippAI talks to your local terminal directly — captures stay on disk, nothing is sent to a server. Your prompts go only into your own Claude session.</p>
+    </details>
+    <details>
+      <summary>Is it a subscription? <span class="pm">+</span></summary>
+      <p>No. A 7-day free trial, then a single one-time purchase unlocks every feature forever, with free updates. No tiers, no recurring fee.</p>
+    </details>
+    <details>
+      <summary>What happens when I get a new Mac? <span class="pm">+</span></summary>
+      <p>Your license moves with you — download SnippAI, enter your key, done. The one-time unlock isn't tied to a single machine.</p>
+    </details>
+    <details>
+      <summary>Does it work on external monitors? <span class="pm">+</span></summary>
+      <p>Yes. Capture on any display; the panel opens centered on the screen where you took the shot.</p>
+    </details>
+  </div>
+</section>
 
-<!-- ── PRICING ──────────────────────────────────────────────── -->
-<section id="pricing">
+<!-- ── PRICING / CTA ────────────────────────────────────────── -->
+<section class="final" id="pricing">
   <div class="wrap">
-    <div class="sec-head" style="margin-inline:auto;text-align:center">
-      <span class="tick">// honest pricing</span>
-      <h2>Try it free. Buy it once.</h2>
-      <p style="margin-inline:auto">Seven days, fully unlocked. If it earns a place in your flow, one payment keeps it forever.</p>
-    </div>
-    <div class="price-wrap" id="download">
-      <div class="price">
-        <span class="trial">● 7-day free trial</span>
-        <!-- EDIT-PRICE -->
-        <div class="amt">$29<span> once</span></div>
-        <div class="once">one-time unlock · free updates · no subscription</div>
-        <ul>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> Every feature, no tiers or gates</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> Multiple screenshots &amp; target cycling</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> Claude-status badges &amp; live mirror</li>
-          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg> Use on your own Mac, forever</li>
-        </ul>
-        <!-- EDIT-DOWNLOAD -->
-        <a class="btn-primary" href="#">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v11m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>
-          Download &amp; start the trial
-        </a>
-      </div>
+    <div class="sec-title">Try it free. Buy it once.</div>
+    <!-- EDIT-PRICE -->
+    <div class="amt">$29<span> once</span></div>
+    <div class="meta">7-day free trial · <b>one-time unlock</b> · free updates</div>
+    <div class="cta center" style="justify-content:center">
+      <!-- EDIT-DOWNLOAD -->
+      <a class="btn btn-fill" href="#">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v11m0 0l4-4m-4 4l-4-4M5 21h14"/></svg>
+        Download &amp; start the trial
+      </a>
     </div>
   </div>
 </section>
@@ -481,20 +371,16 @@ footer{border-top:1px solid var(--line); padding:46px 0 60px; margin-top:30px}
   <div class="wrap foot">
     <a class="brand" href="#top"><span class="glyph"><svg><use href="#mark"/></svg></span> SnippAI</a>
     <div class="foot-links">
-      <a href="#how">How it works</a>
-      <a href="#features">Features</a>
-      <a href="#pricing">Pricing</a>
-      <a href="mailto:hello@snippai.app">Support</a>
+      <a href="#features">Features</a><a href="#faq">FAQ</a><a href="mailto:hello@snippai.app">Support</a>
     </div>
-    <div>© 2026 SnippAI · Built for macOS</div>
+    <div>© 2026 SnippAI</div>
   </div>
 </footer>
 
 <script>
-  // subtle: solidify nav border once scrolled
-  const h = document.querySelector('header');
-  const onScroll = () => h.classList.toggle('scrolled', window.scrollY > 10);
-  document.addEventListener('scroll', onScroll, {passive:true}); onScroll();
+  const h=document.querySelector('header');
+  const f=()=>h.classList.toggle('scrolled',scrollY>8);
+  addEventListener('scroll',f,{passive:true}); f();
 </script>
 </body>
 </html>
