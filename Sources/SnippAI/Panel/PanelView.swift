@@ -25,6 +25,13 @@ struct PanelView: View {
         .background(background)
         .clipShape(RoundedRectangle(cornerRadius: PanelStyle.panelRadius))
         .overlay(RoundedRectangle(cornerRadius: PanelStyle.panelRadius).strokeBorder(.white.opacity(0.08), lineWidth: 1))
+        // Visible drag-to-resize affordance in the bottom-right corner.
+        .overlay(alignment: .bottomTrailing) {
+            ResizeGrip()
+                .frame(width: 16, height: 16)
+                .padding(7)
+                .accessibilityLabel("Resize panel")
+        }
         .snippaiDynamicTypeClamp()
     }
 
@@ -58,15 +65,15 @@ private struct TitleBar: View {
                 Image(nsImage: thumb)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 40, height: 28)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.15)))
+                    .frame(width: 60, height: 42)
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+                    .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.white.opacity(0.15)))
                     .accessibilityLabel("Captured screenshot")
             } else {
                 Image(systemName: "camera.viewfinder")
-                    .scaledFont(18)
+                    .scaledFont(20)
                     .foregroundStyle(.secondary)
-                    .frame(width: 40, height: 28)
+                    .frame(width: 60, height: 42)
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text("SnippAI").scaledFont(14, weight: .semibold)
