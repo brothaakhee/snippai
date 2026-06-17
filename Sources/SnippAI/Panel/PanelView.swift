@@ -7,7 +7,6 @@ struct PanelView: View {
     @Bindable var model: AppModel
     var onClose: () -> Void
     var onAddScreenshot: () -> Void = {}
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         VStack(spacing: 0) {
@@ -22,10 +21,12 @@ struct PanelView: View {
         }
         // Fill the (resizable) window rather than a fixed size, so dragging the
         // panel wider reveals more of the terminal mirror's width.
-        .frame(minWidth: 360, maxWidth: .infinity, minHeight: 360, maxHeight: .infinity)
-        .background(background)
+        .frame(minWidth: 420, maxWidth: .infinity, minHeight: 420, maxHeight: .infinity)
+        // A deliberate flat dark surface (matches the site) — not the translucent
+        // system material, which washes out light/gray over a dark desktop.
+        .background(PanelStyle.surface)
         .clipShape(RoundedRectangle(cornerRadius: PanelStyle.panelRadius))
-        .overlay(RoundedRectangle(cornerRadius: PanelStyle.panelRadius).strokeBorder(.white.opacity(0.08), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: PanelStyle.panelRadius).strokeBorder(.white.opacity(0.10), lineWidth: 1))
         // Visible drag-to-resize affordance in the bottom-right corner.
         .overlay(alignment: .bottomTrailing) {
             ResizeGrip()
@@ -33,17 +34,9 @@ struct PanelView: View {
                 .padding(7)
                 .accessibilityLabel("Resize panel")
         }
+        .tint(PanelStyle.accent)              // mint send button / selection / focus
+        .environment(\.colorScheme, .dark)    // always dark, regardless of system appearance
         .snippaiDynamicTypeClamp()
-    }
-
-    // .regularMaterial reads better than ultraThin over busy desktops; honor
-    // Reduce Transparency with a solid surface.
-    @ViewBuilder private var background: some View {
-        if reduceTransparency {
-            Color(nsColor: .windowBackgroundColor)
-        } else {
-            Color.clear.background(.regularMaterial)
-        }
     }
 }
 
@@ -85,7 +78,7 @@ private struct TitleBar: View {
             .accessibilityLabel("Close SnippAI")
         }
         .padding(.horizontal, PanelStyle.contentInset)
-        .padding(.vertical, 10)
+        .padding(.vertical, PanelStyle.rowPadV)
     }
 
     /// The staged screenshots as a removable strip, with a trailing "+" to add more.
@@ -192,7 +185,7 @@ private struct ComposeView: View {
                 .overlay(RoundedRectangle(cornerRadius: PanelStyle.controlRadius)
                     .strokeBorder(.white.opacity(0.06), lineWidth: 1))
                 .padding(.horizontal, PanelStyle.contentInset)
-                .padding(.vertical, 8)
+                .padding(.bottom, PanelStyle.rowPadV)
                 .frame(maxHeight: .infinity)
         }
         // Escape backs out to the session picker rather than dismissing everything.
@@ -216,7 +209,7 @@ private struct ComposeView: View {
             .clipped()
             switchControls
         }
-        .padding(.horizontal, PanelStyle.contentInset).padding(.vertical, 8)
+        .padding(.horizontal, PanelStyle.contentInset).padding(.vertical, PanelStyle.rowPadV)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: model.selectedSessionID)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(targetBarAccessibilityLabel)
@@ -229,7 +222,7 @@ private struct ComposeView: View {
     private func targetIdentity(session: TerminalSession?, state: AgentState) -> some View {
         HStack(spacing: 8) {
             Image(systemName: session?.looksLikeAgent == true ? "sparkles" : "terminal")
-                .foregroundStyle(session?.looksLikeAgent == true ? Color.accentColor : .secondary)
+                .foregroundStyle(session?.looksLikeAgent == true ? PanelStyle.accent : .secondary)
                 .scaledFont(12)
             VStack(alignment: .leading, spacing: 0) {
                 Text(session?.folderName ?? "session")
@@ -327,7 +320,7 @@ private struct ComposeView: View {
                             in: RoundedRectangle(cornerRadius: PanelStyle.controlRadius))
                 .overlay(
                     RoundedRectangle(cornerRadius: PanelStyle.controlRadius)
-                        .strokeBorder(Color.accentColor.opacity(inputFocused ? 0.55 : 0), lineWidth: 1.5)
+                        .strokeBorder(PanelStyle.accent.opacity(inputFocused ? 0.55 : 0), lineWidth: 1.5)
                 )
 
                 Button(action: send) {
@@ -340,9 +333,9 @@ private struct ComposeView: View {
                         }
                     }
                     .frame(width: sendSize, height: sendSize)
-                    .background(canSend ? Color.accentColor : Color.primary.opacity(0.12), in: Circle())
+                    .background(canSend ? PanelStyle.accent : Color.primary.opacity(0.12), in: Circle())
                     .foregroundStyle(canSend ? .white : .secondary)
-                    .shadow(color: .accentColor.opacity(canSend ? 0.3 : 0), radius: 4, y: 1)
+                    .shadow(color: PanelStyle.accent.opacity(canSend ? 0.3 : 0), radius: 4, y: 1)
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: canSend)
                 }
                 .buttonStyle(.plain)
@@ -355,7 +348,7 @@ private struct ComposeView: View {
             // container's 12pt below, so the hint sits with equal breathing room.
             footer.padding(.top, 6)
         }
-        .padding(.horizontal, PanelStyle.contentInset).padding(.top, 10).padding(.bottom, 12)
+        .padding(.horizontal, PanelStyle.contentInset).padding(.top, PanelStyle.rowPadV).padding(.bottom, 12)
     }
 
     @ViewBuilder

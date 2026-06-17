@@ -43,7 +43,7 @@ struct SettingsView: View {
         HStack(spacing: 12) {
             Image(systemName: "keyboard")
                 .scaledFont(26, weight: .medium)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(PanelStyle.accent)
                 .frame(width: 40)
             VStack(alignment: .leading, spacing: 2) {
                 Text("SnippAI Settings").scaledFont(17, weight: .semibold)
@@ -134,11 +134,11 @@ struct SettingsView: View {
                 .padding(.vertical, 5).padding(.horizontal, 10)
                 .background(
                     RoundedRectangle(cornerRadius: PanelStyle.controlRadius)
-                        .fill(recorder.isRecording ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.08))
+                        .fill(recorder.isRecording ? PanelStyle.accent.opacity(0.18) : Color.primary.opacity(0.08))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: PanelStyle.controlRadius)
-                        .strokeBorder(recorder.isRecording ? Color.accentColor : .clear, lineWidth: 1.5)
+                        .strokeBorder(recorder.isRecording ? PanelStyle.accent : .clear, lineWidth: 1.5)
                 )
         }
         .buttonStyle(.plain)
