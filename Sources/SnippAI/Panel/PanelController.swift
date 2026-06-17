@@ -91,32 +91,14 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     private func positionPanel(_ panel: NSWindow, besideSelection rect: CGRect?) {
         let size = panel.frame.size
+        // Always center the panel — on the display where the capture happened (so it
+        // lands on the right monitor in a multi-display setup), else the main screen.
         let anchor = rect.map { CGPoint(x: $0.midX, y: $0.midY) }
         let screen = NSScreen.screens.first { s in anchor.map { s.frame.contains($0) } ?? false }
             ?? NSScreen.main ?? NSScreen.screens.first
         guard let screen else { return }
         let visible = screen.visibleFrame
-        let gap: CGFloat = 16
-
-        var origin: CGPoint
-        if let rect {
-            // Prefer placing to the right of the selection; fall back to left,
-            // then below, then above — whichever fits — so the capture stays visible.
-            let centeredY = rect.midY - size.height / 2
-            if rect.maxX + gap + size.width <= visible.maxX {            // right
-                origin = CGPoint(x: rect.maxX + gap, y: centeredY)
-            } else if rect.minX - gap - size.width >= visible.minX {     // left
-                origin = CGPoint(x: rect.minX - gap - size.width, y: centeredY)
-            } else if rect.minY - gap - size.height >= visible.minY {    // below
-                origin = CGPoint(x: rect.midX - size.width / 2, y: rect.minY - gap - size.height)
-            } else {                                                     // above
-                origin = CGPoint(x: rect.midX - size.width / 2, y: rect.maxY + gap)
-            }
-        } else {
-            origin = CGPoint(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2)
-        }
-        origin.x = min(max(origin.x, visible.minX + 12), visible.maxX - size.width - 12)
-        origin.y = min(max(origin.y, visible.minY + 12), visible.maxY - size.height - 12)
+        let origin = CGPoint(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2)
         panel.setFrameOrigin(origin)
     }
 }
