@@ -6,11 +6,12 @@ import SnippAIKit
 struct PanelView: View {
     @Bindable var model: AppModel
     var onClose: () -> Void
+    var onAddScreenshot: () -> Void = {}
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         VStack(spacing: 0) {
-            TitleBar(model: model, onClose: onClose)
+            TitleBar(model: model, onClose: onClose, onAddScreenshot: onAddScreenshot)
             Divider().opacity(0.5)
             switch model.phase {
             case .picking:
@@ -49,39 +50,28 @@ struct PanelView: View {
 private struct TitleBar: View {
     @Bindable var model: AppModel
     var onClose: () -> Void
+    var onAddScreenshot: () -> Void = {}
 
     /// Convey live, changing state rather than restating the visible thumbnail.
     private var subtitle: String {
         if model.phase == .composing, let session = model.selectedSession {
             return "→ \(session.folderName)"
         }
-        if model.screenshotURL != nil { return "Choose a session to send to" }
+        if !model.screenshotURLs.isEmpty { return "Choose a session to send to" }
         return "Press ⌥⇧4 to capture"
     }
 
     var body: some View {
         HStack(spacing: 10) {
-            if let url = model.screenshotURL, let thumb = NSImage(contentsOf: url) {
-                Image(nsImage: thumb)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 60, height: 42)
-                    .clipShape(RoundedRectangle(cornerRadius: 7))
-                    .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.white.opacity(0.15)))
-                    .accessibilityLabel("Captured screenshot")
-            } else {
-                Image(systemName: "camera.viewfinder")
-                    .scaledFont(20)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 60, height: 42)
-            }
+            attachments
             VStack(alignment: .leading, spacing: 1) {
                 Text("SnippAI").scaledFont(14, weight: .semibold)
                 Text(subtitle)
                     .scaledFont(11).foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            Spacer()
+            .layoutPriority(-1)   // yield width to the thumbnails before truncating
+            Spacer(minLength: 4)
             Button(action: onClose) {
                 Image(systemName: "xmark")
                     .scaledFont(11, weight: .bold)
@@ -96,6 +86,87 @@ private struct TitleBar: View {
         }
         .padding(.horizontal, PanelStyle.contentInset)
         .padding(.vertical, 10)
+    }
+
+    /// The staged screenshots as a removable strip, with a trailing "+" to add more.
+    /// Falls back to the camera glyph when nothing is staged.
+    @ViewBuilder
+    private var attachments: some View {
+        if model.screenshotURLs.isEmpty {
+            Image(systemName: "camera.viewfinder")
+                .scaledFont(20)
+                .foregroundStyle(.secondary)
+                .frame(width: 60, height: 42)
+        } else {
+            HStack(spacing: 6) {
+                ForEach(model.screenshotURLs, id: \.self) { url in
+                    ThumbnailChip(url: url) { model.removeScreenshot(url) }
+                }
+                if model.canAddScreenshot {
+                    AddScreenshotButton(action: onAddScreenshot)
+                }
+            }
+        }
+    }
+}
+
+/// One screenshot thumbnail with a hover-revealed remove button.
+private struct ThumbnailChip: View {
+    let url: URL
+    let onRemove: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Group {
+                if let image = NSImage(contentsOf: url) {
+                    Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                } else {
+                    Color.primary.opacity(0.08)
+                }
+            }
+            .frame(width: 56, height: 40)
+            .clipShape(RoundedRectangle(cornerRadius: 7))
+            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.white.opacity(0.15)))
+
+            if hovering {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark.circle.fill")
+                        .scaledFont(13)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .black.opacity(0.6))
+                }
+                .buttonStyle(.plain)
+                .padding(2)
+                .transition(.opacity)
+                .accessibilityLabel("Remove screenshot")
+            }
+        }
+        .onHover { isHovering in withAnimation(.easeInOut(duration: 0.1)) { hovering = isHovering } }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Screenshot")
+    }
+}
+
+/// The "+" affordance to capture and append another screenshot.
+private struct AddScreenshotButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "plus")
+                .scaledFont(14, weight: .medium)
+                .foregroundStyle(.secondary)
+                .frame(width: 30, height: 40)
+                .background(
+                    RoundedRectangle(cornerRadius: 7)
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3]))
+                        .foregroundStyle(.secondary.opacity(0.5)))
+                .contentShape(RoundedRectangle(cornerRadius: 7))
+        }
+        .buttonStyle(.plain)
+        .help("Add another screenshot (⌥⇧4)")
+        .accessibilityLabel("Add another screenshot")
     }
 }
 
@@ -301,7 +372,7 @@ private struct ComposeView: View {
     }
 
     private var canSend: Bool {
-        !model.isSending && (!model.messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.screenshotURL != nil)
+        !model.isSending && (!model.messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !model.screenshotURLs.isEmpty)
     }
 
     private func send() {

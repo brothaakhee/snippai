@@ -43,6 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         onboarding.shortcutDisplayProvider = { [weak self] in
             self?.shortcutStore.combo.displayString ?? "⌥⇧4"
         }
+        // The panel's "+" runs the same capture flow (which appends when open).
+        panelController.onAddScreenshot = { [weak self] in self?.beginCapture() }
 
         // Light up the menu-bar dot when a tracked session needs attention, and
         // bring the hook listener back if the user enabled it previously.
@@ -78,10 +80,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Debug: auto-open the panel (optionally with a sample screenshot) so the
         // UI can be inspected/screenshotted without driving the capture flow.
         if ProcessInfo.processInfo.environment["SNIPPAI_AUTO_PANEL"] == "1" {
-            let sample = ProcessInfo.processInfo.environment["SNIPPAI_SAMPLE_SHOT"]
-                .map { URL(fileURLWithPath: $0) }
+            let samples = (ProcessInfo.processInfo.environment["SNIPPAI_SAMPLE_SHOT"] ?? "")
+                .split(separator: ",").map { URL(fileURLWithPath: String($0)) }
             Task {
-                await model.beginSession(screenshot: sample)
+                await model.beginSession(screenshots: samples)
                 panelController.show(onClose: {})
             }
         }
@@ -151,7 +153,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func menuOpenPanel() {
         Task {
-            await model.beginSession(screenshot: model.screenshotURL)
+            await model.beginSession(screenshots: model.screenshotURLs)
             panelController.show(onClose: {})
         }
     }
@@ -168,8 +170,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             defer { isCapturing = false }
             do {
                 guard let outcome = try await captureController.captureRegion() else { return } // cancelled
-                await model.beginSession(screenshot: outcome.url)
-                // Place the panel beside the captured region so it doesn't cover it.
+                // If the panel is already open, accumulate this shot into the current
+                // draft (keep the typed message + target); otherwise start fresh.
+                if panelController.isVisible {
+                    model.addScreenshot(outcome.url)
+                } else {
+                    await model.beginSession(screenshots: [outcome.url])
+                }
                 panelController.show(besideSelection: outcome.globalRect, onClose: {})
             } catch {
                 presentError(error)

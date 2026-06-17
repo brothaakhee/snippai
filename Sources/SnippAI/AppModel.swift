@@ -18,7 +18,10 @@ final class AppModel {
     var pickerQuery: String = ""
     /// Bumped each time the picker is (re)presented so the search field re-grabs focus.
     var pickerFocusToken = 0
-    var screenshotURL: URL?
+    /// Screenshots staged for the current prompt. Multiple can be accumulated (the
+    /// hotkey/"+" appends) and all are sent together. Capped at `maxScreenshots`.
+    var screenshotURLs: [URL] = []
+    static let maxScreenshots = 5
     var screen: TerminalScreen = .empty
     var messageText: String = ""
     var statusMessage: String?
@@ -82,9 +85,10 @@ final class AppModel {
         }
     }
 
-    /// Called when a new screenshot arrives and the panel is shown.
-    func beginSession(screenshot: URL?) async {
-        screenshotURL = screenshot
+    /// Starts a FRESH compose session with the given screenshots (resets the draft).
+    /// Used on first capture and when reopening the panel.
+    func beginSession(screenshots: [URL]) async {
+        screenshotURLs = Array(screenshots.prefix(Self.maxScreenshots))
         justSent = false
         messageText = ""
         pickerQuery = ""
@@ -248,10 +252,28 @@ final class AppModel {
         }
     }
 
-    /// Composes the outgoing message (user text + screenshot path) and submits it.
+    // MARK: - Screenshot accumulation
+
+    /// Whether another screenshot can be staged (under the cap).
+    var canAddScreenshot: Bool { screenshotURLs.count < Self.maxScreenshots }
+
+    /// Appends a screenshot to the current draft (used by the hotkey/"+"), keeping
+    /// the typed message and selected session intact. No-op at the cap.
+    func addScreenshot(_ url: URL) {
+        guard canAddScreenshot, !screenshotURLs.contains(url) else { return }
+        screenshotURLs.append(url)
+        clearSentBadge()
+    }
+
+    /// Removes a staged screenshot.
+    func removeScreenshot(_ url: URL) {
+        screenshotURLs.removeAll { $0 == url }
+    }
+
+    /// Composes the outgoing message (user text + screenshot paths) and submits it.
     func send() async {
         guard let sessionID = selectedSessionID else { return }
-        let composed = Self.composeMessage(text: messageText, screenshot: screenshotURL)
+        let composed = composeMessage(text: messageText, screenshots: screenshotURLs)
         guard !composed.isEmpty else { return }
         isSending = true
         defer { isSending = false }
@@ -262,6 +284,7 @@ final class AppModel {
             try await adapter.send(text: composed, toSession: sessionID)
             justSent = true
             messageText = ""
+            screenshotURLs = []     // consumed — next prompt starts clean
             mirrorScrollTick += 1   // snap the mirror to the tail to show the result
             statusMessage = "Sent to \(selectedSession?.folderName ?? "session")"
             // We just gave this session work → it's busy again. Clears any prior
@@ -271,21 +294,6 @@ final class AppModel {
         } catch {
             connectionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
-    }
-
-    /// Builds the single-line text injected into the session. Kept to one line so a
-    /// live agent CLI receives it as one prompt (embedded newlines would submit
-    /// prematurely / run as separate commands). The bare screenshot path lets
-    /// Claude's Read tool ingest the PNG without a native image attachment.
-    static func composeMessage(text: String, screenshot: URL?) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "\n", with: " ")
-        guard let screenshot else { return trimmed }
-        let path = screenshot.path
-        if trimmed.isEmpty {
-            return "Look at this screenshot: \(path)"
-        }
-        return "\(trimmed)  (screenshot: \(path))"
     }
 
     func teardown() {

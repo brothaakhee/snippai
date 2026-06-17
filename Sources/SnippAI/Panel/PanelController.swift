@@ -13,6 +13,12 @@ final class PanelController: NSObject, NSWindowDelegate {
     private var panel: KeyablePanel?
     private let model: AppModel
     private var onClose: () -> Void = {}
+    /// Invoked by the panel's "+" button to capture and append another screenshot.
+    var onAddScreenshot: () -> Void = {}
+
+    /// Whether the panel is currently on screen (so a new capture knows to append
+    /// to the open draft vs. start fresh).
+    var isVisible: Bool { panel?.isVisible ?? false }
 
     private static let widthKey = "panelWidth"
     private static let heightKey = "panelHeight"
@@ -63,6 +69,8 @@ final class PanelController: NSObject, NSWindowDelegate {
         let hosting = NSHostingView(rootView: PanelView(model: model, onClose: { [weak self] in
             self?.hide()
             self?.onClose()
+        }, onAddScreenshot: { [weak self] in
+            self?.onAddScreenshot()
         }))
         hosting.sizingOptions = []
         let size = savedSize
