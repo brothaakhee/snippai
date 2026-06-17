@@ -6,11 +6,12 @@ import SnippAIKit
 struct PanelView: View {
     @Bindable var model: AppModel
     var onClose: () -> Void
+    var onAddScreenshot: () -> Void = {}
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         VStack(spacing: 0) {
-            TitleBar(model: model, onClose: onClose)
+            TitleBar(model: model, onClose: onClose, onAddScreenshot: onAddScreenshot)
             Divider().opacity(0.5)
             switch model.phase {
             case .picking:
@@ -19,10 +20,19 @@ struct PanelView: View {
                 ComposeView(model: model)
             }
         }
-        .frame(width: 420, height: 560)
+        // Fill the (resizable) window rather than a fixed size, so dragging the
+        // panel wider reveals more of the terminal mirror's width.
+        .frame(minWidth: 360, maxWidth: .infinity, minHeight: 360, maxHeight: .infinity)
         .background(background)
         .clipShape(RoundedRectangle(cornerRadius: PanelStyle.panelRadius))
         .overlay(RoundedRectangle(cornerRadius: PanelStyle.panelRadius).strokeBorder(.white.opacity(0.08), lineWidth: 1))
+        // Visible drag-to-resize affordance in the bottom-right corner.
+        .overlay(alignment: .bottomTrailing) {
+            ResizeGrip()
+                .frame(width: 16, height: 16)
+                .padding(7)
+                .accessibilityLabel("Resize panel")
+        }
         .snippaiDynamicTypeClamp()
     }
 
@@ -40,39 +50,28 @@ struct PanelView: View {
 private struct TitleBar: View {
     @Bindable var model: AppModel
     var onClose: () -> Void
+    var onAddScreenshot: () -> Void = {}
 
     /// Convey live, changing state rather than restating the visible thumbnail.
     private var subtitle: String {
         if model.phase == .composing, let session = model.selectedSession {
             return "→ \(session.folderName)"
         }
-        if model.screenshotURL != nil { return "Choose a session to send to" }
-        return "Press ⌥⌘4 to capture"
+        if !model.screenshotURLs.isEmpty { return "Choose a session to send to" }
+        return "Press ⌥⇧4 to capture"
     }
 
     var body: some View {
         HStack(spacing: 10) {
-            if let url = model.screenshotURL, let thumb = NSImage(contentsOf: url) {
-                Image(nsImage: thumb)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 40, height: 28)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.15)))
-                    .accessibilityLabel("Captured screenshot")
-            } else {
-                Image(systemName: "camera.viewfinder")
-                    .scaledFont(18)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 40, height: 28)
-            }
+            attachments
             VStack(alignment: .leading, spacing: 1) {
                 Text("SnippAI").scaledFont(14, weight: .semibold)
                 Text(subtitle)
                     .scaledFont(11).foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            Spacer()
+            .layoutPriority(-1)   // yield width to the thumbnails before truncating
+            Spacer(minLength: 4)
             Button(action: onClose) {
                 Image(systemName: "xmark")
                     .scaledFont(11, weight: .bold)
@@ -87,6 +86,90 @@ private struct TitleBar: View {
         }
         .padding(.horizontal, PanelStyle.contentInset)
         .padding(.vertical, 10)
+    }
+
+    /// The staged screenshots as a removable strip, with a trailing "+" to add more.
+    /// Falls back to the camera glyph when nothing is staged.
+    @ViewBuilder
+    private var attachments: some View {
+        if model.screenshotURLs.isEmpty {
+            Image(systemName: "camera.viewfinder")
+                .scaledFont(20)
+                .foregroundStyle(.secondary)
+                .frame(width: 60, height: 42)
+        } else {
+            HStack(spacing: 6) {
+                ForEach(model.screenshotURLs, id: \.self) { url in
+                    ThumbnailChip(url: url) { model.removeScreenshot(url) }
+                }
+                if model.canAddScreenshot {
+                    AddScreenshotButton(action: onAddScreenshot)
+                }
+            }
+        }
+    }
+}
+
+/// One screenshot thumbnail with a hover-revealed remove button.
+private struct ThumbnailChip: View {
+    let url: URL
+    let onRemove: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Group {
+                if let image = NSImage(contentsOf: url) {
+                    Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                } else {
+                    Color.primary.opacity(0.08)
+                }
+            }
+            .frame(width: 56, height: 40)
+            .clipShape(RoundedRectangle(cornerRadius: 7))
+            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.white.opacity(0.15)))
+
+            if hovering {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark.circle.fill")
+                        .scaledFont(13)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .black.opacity(0.6))
+                }
+                .buttonStyle(.plain)
+                .padding(2)
+                .transition(.opacity)
+                .accessibilityLabel("Remove screenshot")
+            }
+        }
+        .onHover { isHovering in withAnimation(.easeInOut(duration: 0.1)) { hovering = isHovering } }
+        // The hover-only × is invisible to VoiceOver, so expose removal as an
+        // accessibility action on the chip itself (reachable from the actions rotor).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Screenshot")
+        .accessibilityAction(named: Text("Remove screenshot")) { onRemove() }
+    }
+}
+
+/// The "+" affordance to capture and append another screenshot.
+private struct AddScreenshotButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "plus")
+                .scaledFont(14, weight: .medium)
+                .foregroundStyle(.secondary)
+                .frame(width: 30, height: 40)
+                .background(
+                    RoundedRectangle(cornerRadius: 7)
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3]))
+                        .foregroundStyle(.secondary.opacity(0.5)))
+                .contentShape(RoundedRectangle(cornerRadius: 7))
+        }
+        .buttonStyle(.plain)
+        .help("Add another screenshot (⌥⇧4)")
+        .accessibilityLabel("Add another screenshot")
     }
 }
 
@@ -104,7 +187,7 @@ private struct ComposeView: View {
             targetBar
             // The mirror is an inset, rounded "screen" rather than a full-bleed
             // opaque slab butting against the material — no bracketing dividers.
-            TerminalMirrorView(screen: model.screen)
+            TerminalMirrorView(screen: model.screen, scrollKey: model.mirrorScrollKey)
                 .clipShape(RoundedRectangle(cornerRadius: PanelStyle.controlRadius))
                 .overlay(RoundedRectangle(cornerRadius: PanelStyle.controlRadius)
                     .strokeBorder(.white.opacity(0.06), lineWidth: 1))
@@ -121,31 +204,77 @@ private struct ComposeView: View {
 
     private var targetBar: some View {
         HStack(spacing: 8) {
-            Image(systemName: model.selectedSession?.looksLikeAgent == true ? "sparkles" : "terminal")
-                .foregroundStyle(model.selectedSession?.looksLikeAgent == true ? Color.accentColor : .secondary)
+            // The identity slides in from the side we're cycling toward, so a ⌘←/⌘→
+            // switch reads as directional motion. A constant-width, clipped container
+            // keeps the right-hand controls from reflowing as the name changes.
+            ZStack(alignment: .leading) {
+                targetIdentity(session: model.selectedSession, state: selectedAgentState)
+                    .id(model.selectedSessionID)
+                    .transition(identityTransition)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .clipped()
+            switchControls
+        }
+        .padding(.horizontal, PanelStyle.contentInset).padding(.vertical, 8)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: model.selectedSessionID)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(targetBarAccessibilityLabel)
+    }
+
+    private var selectedAgentState: AgentState {
+        model.selectedSessionID.map { model.agentState(for: $0) } ?? .unknown
+    }
+
+    private func targetIdentity(session: TerminalSession?, state: AgentState) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: session?.looksLikeAgent == true ? "sparkles" : "terminal")
+                .foregroundStyle(session?.looksLikeAgent == true ? Color.accentColor : .secondary)
                 .scaledFont(12)
             VStack(alignment: .leading, spacing: 0) {
-                Text(model.selectedSession?.folderName ?? "session")
+                Text(session?.folderName ?? "session")
                     .scaledFont(12, weight: .semibold)
-                Text(model.selectedSession?.disambiguator ?? "")
+                    .lineLimit(1)
+                Text(session?.disambiguator ?? "")
                     .scaledFont(10).foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
             // A live-mirror indicator so the terminal's liveness is legible.
             LiveDot()
-            // Hook-derived semantic state (Done / Needs you), when known. Pure
-            // enrichment alongside the live mirror.
-            if let id = model.selectedSessionID {
-                AgentStateBadge(state: model.agentState(for: id))
+            // Hook-derived semantic state (Done / Needs you), when known.
+            AgentStateBadge(state: state)
+        }
+    }
+
+    @ViewBuilder
+    private var switchControls: some View {
+        HStack(spacing: 8) {
+            if let pos = model.targetPosition, pos.total > 1 {
+                Text("\(pos.index)/\(pos.total)")
+                    .scaledFont(10, weight: .medium).monospacedDigit()
+                    .foregroundStyle(.tertiary)
+                    .contentTransition(.numericText())
+                    .accessibilityHidden(true)
+                Text("⌘ ←→")
+                    .scaledFont(10, design: .rounded)
+                    .foregroundStyle(.tertiary)
+                    .help("Switch target: ⌘← or ⌘↑ previous · ⌘→ or ⌘↓ next")
+                    .accessibilityHidden(true)
             }
-            Spacer()
             Button("Change") { model.backToPicker() }
                 .scaledFont(11)
                 .buttonStyle(.borderless)
                 .accessibilityHint("Pick a different session")
         }
-        .padding(.horizontal, PanelStyle.contentInset).padding(.vertical, 8)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(targetBarAccessibilityLabel)
+        .fixedSize()
+    }
+
+    private var identityTransition: AnyTransition {
+        if reduceMotion { return .opacity }
+        let forward = model.cycleDirection >= 0
+        return .asymmetric(
+            insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
+            removal: .move(edge: forward ? .leading : .trailing).combined(with: .opacity))
     }
 
     private var targetBarAccessibilityLabel: String {
@@ -153,6 +282,12 @@ private struct ComposeView: View {
         if let id = model.selectedSessionID {
             let state = model.agentState(for: id)
             if state.isVisible { label += ", \(state.label)" }
+        }
+        // VoiceOver parity for the cycling UI: announce position + the shortcut, but
+        // only when there's actually more than one target to cycle through.
+        if let pos = model.targetPosition, pos.total > 1 {
+            label += ", target \(pos.index) of \(pos.total)"
+            label += ". Press Command Left or Command Right to switch target"
         }
         return label
     }
@@ -177,7 +312,8 @@ private struct ComposeView: View {
                                  onCancel: { model.backToPicker() },
                                  onFocusChange: { focused in
                                      withAnimation(.easeInOut(duration: 0.15)) { inputFocused = focused }
-                                 })
+                                 },
+                                 onCycleTarget: { model.cycleTarget(by: $0) })
                         .frame(minHeight: inputMinHeight, maxHeight: inputMaxHeight)
                         .fixedSize(horizontal: false, vertical: true)
                         // Only treat genuine user typing (non-empty) as dismissing
@@ -215,10 +351,11 @@ private struct ComposeView: View {
                 .help("Send (Return) · Shift+Return for a new line")
                 .accessibilityLabel(model.isSending ? "Sending" : "Send message")
             }
-            footer
+            // +6 over the VStack's 6 → ~12pt above the footer, matched by the
+            // container's 12pt below, so the hint sits with equal breathing room.
+            footer.padding(.top, 6)
         }
-        // Extra bottom padding so the footer clears the panel's 14pt rounded corner.
-        .padding(.horizontal, PanelStyle.contentInset).padding(.top, 10).padding(.bottom, 16)
+        .padding(.horizontal, PanelStyle.contentInset).padding(.top, 10).padding(.bottom, 12)
     }
 
     @ViewBuilder
@@ -238,7 +375,7 @@ private struct ComposeView: View {
     }
 
     private var canSend: Bool {
-        !model.isSending && (!model.messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.screenshotURL != nil)
+        !model.isSending && (!model.messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !model.screenshotURLs.isEmpty)
     }
 
     private func send() {

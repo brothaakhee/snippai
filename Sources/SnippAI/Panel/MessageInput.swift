@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import SnippAIKit
 
 /// A multi-line message field with chat-style submit semantics:
 /// **Return = send**, **Shift+Return = newline**. SwiftUI's `TextEditor` can't do
@@ -10,6 +11,8 @@ struct MessageInput: NSViewRepresentable {
     var onSubmit: () -> Void
     var onCancel: () -> Void = {}
     var onFocusChange: (Bool) -> Void = { _ in }
+    /// ⌘+arrow while composing: cycle the target (+1 next, -1 previous).
+    var onCycleTarget: (Int) -> Void = { _ in }
     var focusOnAppear: Bool = true
     // The text the user authors must scale with Dynamic Type too (NSTextView
     // doesn't read SwiftUI's environment), matching the placeholder above it.
@@ -21,6 +24,7 @@ struct MessageInput: NSViewRepresentable {
         textView.onSubmit = onSubmit
         textView.onCancel = onCancel
         textView.onFocusChange = onFocusChange
+        textView.onCycleTarget = onCycleTarget
         textView.string = text
         textView.font = .systemFont(ofSize: fontSize)
         textView.drawsBackground = false
@@ -50,6 +54,7 @@ struct MessageInput: NSViewRepresentable {
         textView.onSubmit = onSubmit
         textView.onCancel = onCancel
         textView.onFocusChange = onFocusChange
+        textView.onCycleTarget = onCycleTarget
         if textView.font?.pointSize != fontSize { textView.font = .systemFont(ofSize: fontSize) }
         if textView.string != text { textView.string = text }
     }
@@ -70,6 +75,22 @@ private final class SubmitTextView: NSTextView {
     var onSubmit: () -> Void = {}
     var onCancel: () -> Void = {}
     var onFocusChange: (Bool) -> Void = { _ in }
+    var onCycleTarget: (Int) -> Void = { _ in }
+
+    // ⌘+arrow cycles the target instead of moving the caret to line/document ends.
+    // NB: arrow keys also carry .function/.numericPad, so we must check the four
+    // real modifiers individually — not compare the whole mask to .command.
+    override func keyDown(with event: NSEvent) {
+        let m = event.modifierFlags
+        if let delta = targetCycleDelta(
+            keyCode: Int(event.keyCode),
+            command: m.contains(.command), option: m.contains(.option),
+            control: m.contains(.control), shift: m.contains(.shift)) {
+            onCycleTarget(delta)
+            return
+        }
+        super.keyDown(with: event)
+    }
 
     override func insertNewline(_ sender: Any?) {
         if NSApp.currentEvent?.modifierFlags.contains(.shift) == true {

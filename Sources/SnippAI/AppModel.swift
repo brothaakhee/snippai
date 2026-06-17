@@ -18,7 +18,10 @@ final class AppModel {
     var pickerQuery: String = ""
     /// Bumped each time the picker is (re)presented so the search field re-grabs focus.
     var pickerFocusToken = 0
-    var screenshotURL: URL?
+    /// Screenshots staged for the current prompt. Multiple can be accumulated (the
+    /// hotkey/"+" appends) and all are sent together. Capped at `maxScreenshots`.
+    var screenshotURLs: [URL] = []
+    static let maxScreenshots = 5
     var screen: TerminalScreen = .empty
     var messageText: String = ""
     var statusMessage: String?
@@ -26,6 +29,11 @@ final class AppModel {
     var isSending = false
     var isLoadingSessions = false
     var justSent = false
+    /// Bumped when the user sends, so the mirror snaps to the tail to show the result.
+    private(set) var mirrorScrollTick = 0
+    /// Key the mirror uses to decide when to force-scroll to the bottom (session
+    /// switch or a fresh send) vs. follow-only-if-at-bottom during live updates.
+    var mirrorScrollKey: String { "\(selectedSessionID ?? "")#\(mirrorScrollTick)" }
 
     /// Push-hook-derived agent state per session id (iTerm GUID). Pure enrichment
     /// over the mirror — see docs/hook-bridge-spec.md. `.unknown` when no signal.
@@ -38,6 +46,9 @@ final class AppModel {
     private var knownSessionIDs: Set<String> = []
     private var ttyToSessionID: [String: String] = [:]
     private var lastAttention = false
+    /// Last rendered frame per session, so re-selecting a target (e.g. via ⌘-arrow
+    /// cycling) repaints its mirror instantly instead of flashing the placeholder.
+    private var screenCache: [String: TerminalScreen] = [:]
 
     let adapter: any TargetAdapter
     private var streamTask: Task<Void, Never>?
@@ -74,20 +85,33 @@ final class AppModel {
         }
     }
 
-    /// Called when a new screenshot arrives and the panel is shown.
-    func beginSession(screenshot: URL?) async {
-        screenshotURL = screenshot
+    /// Starts a FRESH compose session with the given screenshots (resets the draft).
+    /// Used on first capture and when reopening the panel.
+    func beginSession(screenshots: [URL]) async {
+        screenshotURLs = Array(screenshots.prefix(Self.maxScreenshots))
         justSent = false
         messageText = ""
         pickerQuery = ""
         connectionError = nil
-        await refreshSessions()   // sets selectedSessionID to an agent-preferred visible session
+        await refreshSessions()   // sets selectedSessionID to the last-used / preferred session
         if ProcessInfo.processInfo.environment["SNIPPAI_DEMO_STATES"] == "1" { seedDemoStates() }
         let forcePicker = ProcessInfo.processInfo.environment["SNIPPAI_FORCE_PICKER"] == "1"
-        // Auto-jump to composing only when the default target is an agent session;
-        // otherwise show the picker (with that default highlighted for keyboard use).
-        if !forcePicker, let session = selectedSession, session.looksLikeAgent {
+        // Always drop straight into the terminal for the resolved target (the
+        // last-used session, per refreshSessions' selection) to cut steps — even if
+        // it isn't obviously an agent. The picker only appears when there's nothing
+        // to target. Switch later via ⌘-arrow or "Change".
+        if !forcePicker, let session = selectedSession {
             startComposing(sessionID: session.id)
+            // Debug (SNIPPAI_DEMO_CYCLE=1): auto-cycle the target so the ⌘-arrow
+            // behavior + directional slide can be screenshotted without synthetic keys.
+            if ProcessInfo.processInfo.environment["SNIPPAI_DEMO_CYCLE"] == "1" {
+                Task { @MainActor in
+                    for _ in 0..<6 {
+                        try? await Task.sleep(nanoseconds: 1_300_000_000)
+                        cycleTarget(by: 1)
+                    }
+                }
+            }
         } else {
             phase = .picking
             pickerFocusToken += 1
@@ -166,9 +190,37 @@ final class AppModel {
         if justSent { justSent = false; statusMessage = nil }
     }
 
+    /// +1 when the last target change moved forward (⌘→/⌘↓), -1 backward — drives the
+    /// directional slide of the target header so the switch reads as left/right motion.
+    private(set) var cycleDirection = 1
+
+    /// 1-based position of the current target among all sessions, and the total —
+    /// shown as "n / total" next to the switch control so cycling is legible.
+    var targetPosition: (index: Int, total: Int)? {
+        guard let id = selectedSessionID, let idx = sessions.firstIndex(where: { $0.id == id })
+        else { return nil }
+        return (idx + 1, sessions.count)
+    }
+
+    /// Cycles the composing target through the discovered sessions (wrapping), used by
+    /// the ⌘+arrow shortcuts. Reuses `choose` so the mirror, header, and badge all
+    /// follow. No-op outside composing or with fewer than two sessions.
+    func cycleTarget(by delta: Int) {
+        guard phase == .composing, sessions.count > 1 else { return }
+        let ids = sessions.map(\.id)
+        let current = selectedSessionID.flatMap { ids.firstIndex(of: $0) } ?? 0
+        let next = cycledIndex(from: current, by: delta, count: ids.count)
+        guard ids[next] != selectedSessionID else { return }
+        cycleDirection = delta >= 0 ? 1 : -1
+        choose(sessionID: ids[next])
+    }
+
     private func startComposing(sessionID: String) {
         phase = .composing
-        screen = .empty
+        // Show this session's last-known frame instantly (keyed by session, so it's
+        // never another session's content) — only fall back to the "Connecting…"
+        // placeholder for a target we haven't mirrored yet. Keeps cycling smooth.
+        screen = screenCache[sessionID] ?? .empty
         connectionError = nil
         streamTask?.cancel()
         streamGeneration += 1
@@ -183,6 +235,7 @@ final class AppModel {
                 for await snapshot in stream {
                     guard let self, self.streamGeneration == generation else { return }
                     self.screen = snapshot
+                    self.screenCache[sessionID] = snapshot
                     self.reconcileStateWithMirror(sessionID: sessionID)
                 }
                 // Stream ended without an error → the connection dropped (e.g. iTerm
@@ -199,10 +252,28 @@ final class AppModel {
         }
     }
 
-    /// Composes the outgoing message (user text + screenshot path) and submits it.
+    // MARK: - Screenshot accumulation
+
+    /// Whether another screenshot can be staged (under the cap).
+    var canAddScreenshot: Bool { screenshotURLs.count < Self.maxScreenshots }
+
+    /// Appends a screenshot to the current draft (used by the hotkey/"+"), keeping
+    /// the typed message and selected session intact. No-op at the cap.
+    func addScreenshot(_ url: URL) {
+        guard canAddScreenshot, !screenshotURLs.contains(url) else { return }
+        screenshotURLs.append(url)
+        clearSentBadge()
+    }
+
+    /// Removes a staged screenshot.
+    func removeScreenshot(_ url: URL) {
+        screenshotURLs.removeAll { $0 == url }
+    }
+
+    /// Composes the outgoing message (user text + screenshot paths) and submits it.
     func send() async {
         guard let sessionID = selectedSessionID else { return }
-        let composed = Self.composeMessage(text: messageText, screenshot: screenshotURL)
+        let composed = composeMessage(text: messageText, screenshots: screenshotURLs)
         guard !composed.isEmpty else { return }
         isSending = true
         defer { isSending = false }
@@ -213,6 +284,8 @@ final class AppModel {
             try await adapter.send(text: composed, toSession: sessionID)
             justSent = true
             messageText = ""
+            screenshotURLs = []     // consumed — next prompt starts clean
+            mirrorScrollTick += 1   // snap the mirror to the tail to show the result
             statusMessage = "Sent to \(selectedSession?.folderName ?? "session")"
             // We just gave this session work → it's busy again. Clears any prior
             // "needs you"/"done" badge (and the menu-bar dot) until the next hook event.
@@ -221,21 +294,6 @@ final class AppModel {
         } catch {
             connectionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
-    }
-
-    /// Builds the single-line text injected into the session. Kept to one line so a
-    /// live agent CLI receives it as one prompt (embedded newlines would submit
-    /// prematurely / run as separate commands). The bare screenshot path lets
-    /// Claude's Read tool ingest the PNG without a native image attachment.
-    static func composeMessage(text: String, screenshot: URL?) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "\n", with: " ")
-        guard let screenshot else { return trimmed }
-        let path = screenshot.path
-        if trimmed.isEmpty {
-            return "Look at this screenshot: \(path)"
-        }
-        return "\(trimmed)  (screenshot: \(path))"
     }
 
     func teardown() {
@@ -272,6 +330,7 @@ final class AppModel {
         let liveIDs = Set(discovered.map { $0.id })
         let before = agentStates.count
         agentStates = agentStates.filter { liveIDs.contains($0.key) }
+        screenCache = screenCache.filter { liveIDs.contains($0.key) }
         if agentStates.count != before { notifyAttention() }
     }
 

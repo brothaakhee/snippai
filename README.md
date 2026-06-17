@@ -108,7 +108,7 @@ The entire chat UI lives in an opaque `AXWebArea` Chromium doesn't surface, so *
 A native Swift app, no Python runtime. `SnippAIKit` is the engine (iTerm client + protocol + models); `SnippAI` is the menu-bar app.
 
 - **Native iTerm2 client** — AppleScript cookie/key → hand-rolled WebSocket (RFC 6455) over iTerm2's Unix domain socket → SwiftProtobuf messages generated from a version-exact `proto/api.proto`. Enumerate / send / stream / variables / activate. (`Sources/SnippAIKit/ITerm/`)
-- **Capture** — Carbon global hotkey (default ⌥⌘4, no Accessibility needed) → full-screen crosshair overlay (dim + clear selection hole + live dimension badge) → ScreenCaptureKit region capture → PNG. Multi-display + retina aware. (`Sources/SnippAI/Capture/`)
+- **Capture** — Carbon global hotkey (default ⌥⇧4, no Accessibility needed) → full-screen crosshair overlay (dim + clear selection hole + live dimension badge) → ScreenCaptureKit region capture → PNG. Multi-display + retina aware. (`Sources/SnippAI/Capture/`)
 - **Panel** (SwiftUI in a floating `NSPanel`) — screenshot header, **session picker** with rich disambiguating labels (folder · job · window/tab/pane · last on-screen line, agent sessions badged), a **live terminal mirror** that renders the session's emulated cells with ANSI colors + the cursor, and a message input. (`Sources/SnippAI/Panel/`)
 - **Adapter abstraction + router** — `TargetAdapter` protocol with two live impls (iTerm2 native client, Terminal.app via AppleScript). `AdapterRouter` connects to whatever's running, merges discovered sessions into one picker (tagged by source), and routes send/stream/focus back to the owning adapter. Terminal.app has no event stream or per-cell color, so its mirror is plain text refreshed by polling — a fidelity tradeoff vs the native iTerm2 client. (The Claude desktop app was probed and rejected — see [Probed](#probed-the-claude-desktop-app-is-not-adaptable); a hosted PTY remains the v2 north star.)
 - **Claude Code status (hook bridge)** — an opt-in, **default-off** integration (Settings → "Claude Code status (beta)") that surfaces a *Done / Needs you* badge in the picker rows, the panel header, and a menu-bar dot, so you know when a session finished or is waiting — without parsing the mirror TUI. A POSIX shell hook merged into `~/.claude/settings.json` (backup + idempotent + one-click uninstall) pipes one JSON line per `Stop`/`Notification` event to an in-app **AF_UNIX socket** via `nc -U`; the hook is **non-blocking + fail-open** (always `exit 0`, never blocks Claude) and ships **no compiled binary**. Frames correlate to the exact iTerm pane via `ITERM_SESSION_ID` (its GUID *is* the session id) and are dropped if they don't match a known session (anti-spoof). Pure enrichment layered over the live mirror — reverse-engineered from Vibe Island, then scoped down via an adversarial design debate. (`Sources/SnippAIKit/Hooks/`, `Sources/SnippAI/Hooks/`; design: [`docs/hook-bridge-spec.md`](./docs/hook-bridge-spec.md))
@@ -116,7 +116,7 @@ A native Swift app, no Python runtime. `SnippAIKit` is the engine (iTerm client 
 ### Build & run the app
 ```bash
 ./scripts/build_app.sh            # assembles + ad-hoc signs build/SnippAI.app
-open build/SnippAI.app            # menu-bar icon appears; press ⌥⌘4 to capture
+open build/SnippAI.app            # menu-bar icon appears; press ⌥⇧4 to capture
 ```
 First run prompts for **Screen Recording** (capture) and **Automation → iTerm2** (the tunnel). iTerm2's Python API must be enabled once: Settings → General → Magic → "Enable Python API".
 

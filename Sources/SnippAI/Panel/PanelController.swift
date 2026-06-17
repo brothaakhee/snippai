@@ -9,19 +9,55 @@ final class KeyablePanel: NSPanel {
 }
 
 @MainActor
-final class PanelController {
+final class PanelController: NSObject, NSWindowDelegate {
     private var panel: KeyablePanel?
     private let model: AppModel
     private var onClose: () -> Void = {}
+    /// Invoked by the panel's "+" button to capture and append another screenshot.
+    var onAddScreenshot: () -> Void = {}
+
+    /// Whether the panel is currently on screen (so a new capture knows to append
+    /// to the open draft vs. start fresh).
+    var isVisible: Bool { panel?.isVisible ?? false }
+
+    private static let widthKey = "panelWidth"
+    private static let heightKey = "panelHeight"
+    private static let defaultSize = NSSize(width: 420, height: 560)
+    private static let minSize = NSSize(width: 360, height: 360)
 
     init(model: AppModel) {
         self.model = model
+        super.init()
+    }
+
+    /// The persisted panel size, clamped to the minimum (and sane defaults on first run).
+    private var savedSize: NSSize {
+        let d = UserDefaults.standard
+        guard d.object(forKey: Self.widthKey) != nil else { return Self.defaultSize }
+        return NSSize(
+            width: max(Self.minSize.width, CGFloat(d.double(forKey: Self.widthKey))),
+            height: max(Self.minSize.height, CGFloat(d.double(forKey: Self.heightKey))))
+    }
+
+    /// Persist the panel's size after the user finishes a drag-resize, so it's
+    /// restored next time the panel opens.
+    nonisolated func windowDidEndLiveResize(_ notification: Notification) {
+        // AppKit delivers window-delegate callbacks on the main thread. Read our own
+        // panel (Sendable via @MainActor self) rather than the non-Sendable notification.
+        MainActor.assumeIsolated {
+            guard let size = panel?.frame.size else { return }
+            let d = UserDefaults.standard
+            d.set(Double(size.width), forKey: Self.widthKey)
+            d.set(Double(size.height), forKey: Self.heightKey)
+        }
     }
 
     func show(besideSelection rect: CGRect? = nil, onClose: @escaping () -> Void) {
         self.onClose = onClose
         let panel = existingOrNewPanel()
-        positionPanel(panel, besideSelection: rect)
+        // Only (re)position on a fresh open — never on an append-capture, so a panel
+        // the user dragged aside (or is typing in) doesn't get yanked back.
+        if !panel.isVisible { positionPanel(panel, besideSelection: rect) }
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -35,12 +71,17 @@ final class PanelController {
         let hosting = NSHostingView(rootView: PanelView(model: model, onClose: { [weak self] in
             self?.hide()
             self?.onClose()
+        }, onAddScreenshot: { [weak self] in
+            self?.onAddScreenshot()
         }))
         hosting.sizingOptions = []
+        let size = savedSize
         let panel = KeyablePanel(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 560),
-            styleMask: [.borderless, .nonactivatingPanel, .titled, .fullSizeContentView],
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless, .nonactivatingPanel, .titled, .fullSizeContentView, .resizable],
             backing: .buffered, defer: false)
+        panel.minSize = Self.minSize
+        panel.delegate = self
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = true
@@ -60,32 +101,14 @@ final class PanelController {
 
     private func positionPanel(_ panel: NSWindow, besideSelection rect: CGRect?) {
         let size = panel.frame.size
+        // Always center the panel — on the display where the capture happened (so it
+        // lands on the right monitor in a multi-display setup), else the main screen.
         let anchor = rect.map { CGPoint(x: $0.midX, y: $0.midY) }
         let screen = NSScreen.screens.first { s in anchor.map { s.frame.contains($0) } ?? false }
             ?? NSScreen.main ?? NSScreen.screens.first
         guard let screen else { return }
         let visible = screen.visibleFrame
-        let gap: CGFloat = 16
-
-        var origin: CGPoint
-        if let rect {
-            // Prefer placing to the right of the selection; fall back to left,
-            // then below, then above — whichever fits — so the capture stays visible.
-            let centeredY = rect.midY - size.height / 2
-            if rect.maxX + gap + size.width <= visible.maxX {            // right
-                origin = CGPoint(x: rect.maxX + gap, y: centeredY)
-            } else if rect.minX - gap - size.width >= visible.minX {     // left
-                origin = CGPoint(x: rect.minX - gap - size.width, y: centeredY)
-            } else if rect.minY - gap - size.height >= visible.minY {    // below
-                origin = CGPoint(x: rect.midX - size.width / 2, y: rect.minY - gap - size.height)
-            } else {                                                     // above
-                origin = CGPoint(x: rect.midX - size.width / 2, y: rect.maxY + gap)
-            }
-        } else {
-            origin = CGPoint(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2)
-        }
-        origin.x = min(max(origin.x, visible.minX + 12), visible.maxX - size.width - 12)
-        origin.y = min(max(origin.y, visible.minY + 12), visible.maxY - size.height - 12)
+        let origin = CGPoint(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2)
         panel.setFrameOrigin(origin)
     }
 }

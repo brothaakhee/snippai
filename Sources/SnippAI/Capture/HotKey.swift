@@ -12,8 +12,8 @@ final class HotKey {
         var keyCode: UInt32
         var modifiers: UInt32   // Carbon modifier mask (cmdKey, optionKey, …)
 
-        /// ⌥⌘4 — mnemonic for "screenshot" without colliding with the system's ⌘⇧4.
-        static let defaultCombo = KeyCombo(keyCode: UInt32(kVK_ANSI_4), modifiers: UInt32(cmdKey | optionKey))
+        /// ⌥⇧4 — mnemonic for "screenshot" without colliding with the system's ⌘⇧4.
+        static let defaultCombo = KeyCombo(keyCode: UInt32(kVK_ANSI_4), modifiers: UInt32(optionKey | shiftKey))
 
         var displayString: String {
             modifierString + HotKey.keyName(for: keyCode)
