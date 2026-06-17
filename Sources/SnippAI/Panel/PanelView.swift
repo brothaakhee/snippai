@@ -268,10 +268,11 @@ private struct ComposeView: View {
                 .help("Send (Return) · Shift+Return for a new line")
                 .accessibilityLabel(model.isSending ? "Sending" : "Send message")
             }
-            footer
+            // +6 over the VStack's 6 → ~12pt above the footer, matched by the
+            // container's 12pt below, so the hint sits with equal breathing room.
+            footer.padding(.top, 6)
         }
-        // Extra bottom padding so the footer clears the panel's 14pt rounded corner.
-        .padding(.horizontal, PanelStyle.contentInset).padding(.top, 10).padding(.bottom, 16)
+        .padding(.horizontal, PanelStyle.contentInset).padding(.top, 10).padding(.bottom, 12)
     }
 
     @ViewBuilder
