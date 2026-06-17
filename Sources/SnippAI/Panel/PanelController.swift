@@ -55,7 +55,9 @@ final class PanelController: NSObject, NSWindowDelegate {
     func show(besideSelection rect: CGRect? = nil, onClose: @escaping () -> Void) {
         self.onClose = onClose
         let panel = existingOrNewPanel()
-        positionPanel(panel, besideSelection: rect)
+        // Only (re)position on a fresh open — never on an append-capture, so a panel
+        // the user dragged aside (or is typing in) doesn't get yanked back.
+        if !panel.isVisible { positionPanel(panel, besideSelection: rect) }
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }

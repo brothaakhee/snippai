@@ -162,6 +162,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func beginCapture() {
         guard !isCapturing else { return }
+        // If we'd be appending to an open draft that's already at the cap, don't make
+        // the user drag out a region that gets discarded — give audible feedback.
+        if panelController.isVisible && !model.canAddScreenshot {
+            NSSound.beep()
+            return
+        }
         isCapturing = true
         // Note: we deliberately DON'T hide the panel here — the crosshair overlay
         // sits above it, so the user can re-capture (or capture the panel itself)

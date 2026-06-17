@@ -143,8 +143,11 @@ private struct ThumbnailChip: View {
             }
         }
         .onHover { isHovering in withAnimation(.easeInOut(duration: 0.1)) { hovering = isHovering } }
-        .accessibilityElement(children: .contain)
+        // The hover-only × is invisible to VoiceOver, so expose removal as an
+        // accessibility action on the chip itself (reachable from the actions rotor).
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("Screenshot")
+        .accessibilityAction(named: Text("Remove screenshot")) { onRemove() }
     }
 }
 
