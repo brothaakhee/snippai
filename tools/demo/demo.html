@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --mint:#5fe3a1; --amber:#ffb45a; --ink:#f2f2f0; --muted:#9aa1ab; --faint:#5d5d63;
+  --mono:"JetBrains Mono",monospace; --body:"Hanken Grotesk",sans-serif; --line:#23272f;
+}
+*{margin:0;box-sizing:border-box}
+html,body{background:#000}
+#stage{position:relative; width:1280px; height:720px; overflow:hidden; font-family:var(--body);
+  background:radial-gradient(120% 120% at 30% 0%, #15181f 0%, #0a0b0d 55%, #08090b 100%);}
+#stage::after{content:""; position:absolute; inset:0; pointer-events:none;
+  background-image:radial-gradient(rgba(255,255,255,.025) 1px, transparent 1px); background-size:26px 26px}
+
+/* faux app being screenshotted */
+#app{position:absolute; left:150px; top:120px; width:640px; height:470px; z-index:1;
+  background:#0f1115; border:1px solid #1f232b; border-radius:14px; overflow:hidden;
+  box-shadow:0 30px 70px -30px rgba(0,0,0,.7)}
+#app .top{display:flex; align-items:center; gap:10px; padding:18px 22px}
+#app .ico{font-family:var(--mono); color:var(--ink); font-size:18px}
+#app .name{font-weight:600; font-size:19px; color:var(--ink)}
+#app .tabs{display:flex; gap:22px; padding:0 22px; border-bottom:1px solid #1c2027; font-size:13.5px; color:var(--faint)}
+#app .tabs span{padding:10px 0}
+#app .tabs .on{color:var(--ink); box-shadow:inset 0 -2px 0 var(--ink)}
+#app .vars-h{display:flex; align-items:center; gap:10px; padding:18px 22px 10px; color:var(--ink); font-size:15px}
+#app .vars-h .q{margin-left:auto; width:120px; height:26px; border:1px solid #232831; border-radius:7px}
+#app .row{display:flex; align-items:center; gap:12px; padding:11px 22px; font-family:var(--mono); font-size:12.5px; border-top:1px solid #14171d}
+#app .row .k{color:#c8ccd2; width:190px} #app .row .v{color:var(--faint)}
+#app .banner{margin:14px 22px; padding:12px 14px; border-radius:9px; background:rgba(124,99,255,.12);
+  color:#b9a9ff; font-size:13px; display:flex; align-items:center; gap:9px}
+#app .banner b{color:#d9ceff; text-decoration:underline; font-weight:500}
+
+/* capture overlay */
+#marquee{position:absolute; z-index:5; border:1.5px solid var(--mint); border-radius:2px;
+  box-shadow:0 0 0 9999px rgba(0,0,0,.55); opacity:0}
+.tick{position:absolute; width:14px; height:14px; border:2px solid var(--mint)}
+.tl{top:-2px;left:-2px;border-right:0;border-bottom:0}.tr{top:-2px;right:-2px;border-left:0;border-bottom:0}
+.bl{bottom:-2px;left:-2px;border-right:0;border-top:0}.br{bottom:-2px;right:-2px;border-left:0;border-top:0}
+#badge{position:absolute; top:-26px; right:0; font-family:var(--mono); font-size:12px; font-weight:700;
+  background:var(--mint); color:#06150d; padding:2px 8px; border-radius:5px}
+#flash{position:absolute; inset:0; background:var(--mint); opacity:0; border-radius:2px}
+#cursor{position:absolute; z-index:9; left:0; top:0; width:22px; height:22px; will-change:transform}
+
+/* SnippAI panel mock */
+#panelWrap{position:absolute; left:50%; top:50%; z-index:10; transform:translate(-50%,-50%)}
+#panel{width:520px; background:#101216; border:1px solid #23272f; border-radius:14px; overflow:hidden;
+  font-size:13px; opacity:0; box-shadow:0 50px 110px -40px rgba(0,0,0,.95)}
+.pbar{display:flex; align-items:center; gap:9px; padding:12px 14px; border-bottom:1px solid var(--line)}
+.thumb{width:40px;height:28px;border-radius:5px;border:1px solid #2d323c;background:linear-gradient(135deg,#1a2230,#0d1016)}
+.tadd{width:22px;height:28px;border:1px dashed #2d323c;border-radius:5px;display:grid;place-items:center;color:var(--faint);font-size:14px}
+.pbar .nm{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--ink)}
+.pbar .s2{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.pbar .x{margin-left:auto;color:var(--faint)}
+.thumbs{display:flex;gap:5px}
+.ptarget{display:flex;align-items:center;gap:9px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--ink);height:42px}
+#idwrap{position:relative;flex:1;height:30px;overflow:hidden}
+.ident{position:absolute;left:0;top:0;width:100%;display:flex;flex-direction:column;justify-content:center;height:30px}
+.ident .l1{display:flex;align-items:center;gap:7px}
+.ptarget .sp{color:var(--mint)} .ident .nm{font-weight:600}
+.ident .mt{color:var(--faint);font-family:var(--mono);font-size:10.5px;margin-top:1px}
+#cyc{font-family:var(--mono);font-size:10px;color:var(--faint);opacity:0;white-space:nowrap}
+#stateBadge{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;font-weight:600;padding:2px 8px;border-radius:999px;opacity:0;white-space:nowrap}
+.mir{background:#08090b;padding:14px 16px;font-family:var(--mono);font-size:11.5px;line-height:1.8;color:#c4c8ce;height:210px;overflow:hidden;white-space:pre-wrap}
+.mir .g{color:var(--mint)} .mir .a{color:var(--amber)} .mir .b{color:#7cc3ff} .mir .m{color:var(--faint)} .mir .u{color:#c4c8ce}
+.caret{display:inline-block;width:7px;height:13px;background:var(--mint);vertical-align:-2px}
+.pin{display:flex;align-items:center;gap:10px;padding:12px 14px}
+.pin .bx{flex:1;background:rgba(255,255,255,.04);border:1px solid #2d323c;border-radius:9px;padding:9px 12px;font-size:12.5px;min-height:34px;display:flex;align-items:center}
+.pin .bx.focus{border-color:var(--mint)}
+.pin .bx .ph{color:var(--faint)} .pin .bx .typed{color:var(--ink)}
+.pin .icaret{display:inline-block;width:1.5px;height:15px;background:var(--mint);margin-left:1px}
+.pin .snd{width:30px;height:30px;border-radius:50%;background:var(--mint);color:#06150d;display:grid;place-items:center}
+.pin .snd svg{width:14px;height:14px}
+
+/* keycap caption (recurring) */
+#keycap{position:absolute; left:50%; bottom:46px; transform:translateX(-50%); z-index:12; opacity:0;
+  display:flex; align-items:center; gap:7px; font-family:var(--mono); color:var(--ink);
+  background:rgba(18,20,26,.94); border:1px solid #2d323c; padding:9px 15px; border-radius:12px;
+  box-shadow:0 18px 44px -14px rgba(0,0,0,.75)}
+#keycap kbd{font-family:var(--mono); font-size:14px; font-weight:500; color:var(--ink); background:#0c0e12;
+  border:1px solid #3a414d; border-bottom-width:2px; border-radius:6px; padding:2px 8px; min-width:26px; text-align:center}
+#keycap .lab{color:var(--muted); font-size:12.5px; margin-left:5px}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="app">
+    <div class="top"><span class="ico">&gt;_</span><span class="name">api</span></div>
+    <div class="tabs"><span>Deployments</span><span class="on">Variables</span><span>Metrics</span><span>Settings</span></div>
+    <div class="vars-h"><span>33 Service Variables</span><span class="q"></span></div>
+    <div class="row"><span class="k">DATABASE_URL</span><span class="v">••••••••••••••••</span></div>
+    <div class="row"><span class="k">NODE_ENV</span><span class="v">production</span></div>
+    <div class="row"><span class="k">PORT</span><span class="v">8080</span></div>
+    <div class="row"><span class="k">REDIS_URL</span><span class="v">••••••••••••</span></div>
+    <div class="banner"><span>🔗</span> Trying to connect a database? <b>Add Variable</b></div>
+  </div>
+
+  <div id="marquee">
+    <span class="tick tl"></span><span class="tick tr"></span><span class="tick bl"></span><span class="tick br"></span>
+    <span id="badge">0 × 0</span><span id="flash"></span>
+  </div>
+  <svg id="cursor" viewBox="0 0 22 22"><path d="M3 2l14 6.5-6 1.7-2.6 5.8z" fill="#fff" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/></svg>
+
+  <div id="panelWrap"><div id="panel">
+    <div class="pbar">
+      <div class="thumbs"><div class="thumb"></div><div class="tadd">+</div></div>
+      <div><div class="nm">SnippAI</div><div class="s2" id="s2">→ web-frontend</div></div>
+      <div class="x">✕</div>
+    </div>
+    <div class="ptarget">
+      <span class="sp">✦</span>
+      <div id="idwrap">
+        <div class="ident" id="idA"><div class="l1"><span class="nm">web-frontend</span></div><div class="mt">iTerm2 · vite · win 0·tab 1</div></div>
+        <div class="ident" id="idB"><div class="l1"><span class="nm">api-server</span></div><div class="mt">iTerm2 · claude · win 0·tab 2</div></div>
+      </div>
+      <span id="cyc">1/2 ⌘←→</span>
+      <span id="stateBadge">◌ Working</span>
+    </div>
+    <div class="mir" id="mir"></div>
+    <div class="pin">
+      <div class="bx" id="ibox"><span class="ph">Tell Claude what to do…</span></div>
+      <div class="snd" id="snd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
+    </div>
+  </div></div>
+
+  <div id="keycap"></div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const marquee=$('marquee'),badge=$('badge'),flash=$('flash'),cursor=$('cursor'),panel=$('panel'),
+  mir=$('mir'),ibox=$('ibox'),snd=$('snd'),stateBadge=$('stateBadge'),keycap=$('keycap'),
+  idA=$('idA'),idB=$('idB'),cyc=$('cyc'),s2=$('s2');
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const seg=(p,a,b)=>clamp((p-a)/(b-a),0,1);
+const lerp=(a,b,t)=>a+(b-a)*t;
+const easeInOut=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+const easeOut=t=>1-Math.pow(1-t,3);
+const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+const X0=300,Y0=300,X1=770,Y1=560, CSTART={x:880,y:180};
+const MSG="fix the db connection — use the vars in this screenshot";
+const PATH="/var/folders/…/T/SnippAI/api.png";
+const LINES=[
+  {c:'m', t:'> '+MSG+'  (screenshot: '+PATH+')'},
+  {c:'g', t:'✓ Read Variables.tsx'},
+  {c:'u', t:'● The screenshot shows DATABASE_URL is set but unused.'},
+  {c:'b', t:'✏ Edit db.ts — read DATABASE_URL from process.env'},
+  {c:'g', t:'✓ Wired the database connection and reran the build.'},
+  {c:'',  t:''},
+  {c:'g', t:'Done — db connected in 1 file.'},
+];
+const TOTAL=LINES.reduce((n,l)=>n+l.t.length+1,0);
+
+function renderMir(reveal, showCaret){
+  let budget=Math.floor(reveal*TOTAL), html='';
+  for(const l of LINES){
+    const take=clamp(budget,0,l.t.length);
+    if(take>0 || l.t.length===0){
+      const cls=l.c?(' class="'+l.c+'"'):''; html+='<span'+cls+'>'+esc(l.t.slice(0,take))+'</span>';
+    }
+    budget-=l.t.length;
+    if(budget<=0){ if(showCaret) html+='<span class="caret"></span>'; budget=-1e9; }
+    html+='\n';
+  }
+  mir.innerHTML=html; mir.scrollTop=mir.scrollHeight;
+}
+function keycapHTML(keys,label){ return keys.map(k=>'<kbd>'+k+'</kbd>').join('')+'<span class="lab">'+label+'</span>'; }
+
+window.setProgress=function(p){
+  // ── CAPTURE (snappy) ──
+  const travel=easeInOut(seg(p,0.00,0.04));
+  const drag=easeInOut(seg(p,0.04,0.12));
+  const ex=lerp(X0,X1,drag), ey=lerp(Y0,Y1,drag);
+  let cx,cy; if(p<0.04){cx=lerp(CSTART.x,X0,travel);cy=lerp(CSTART.y,Y0,travel);}else{cx=ex;cy=ey;}
+  cursor.style.transform=`translate(${cx}px,${cy}px)`;
+  cursor.style.opacity=Math.min(seg(p,0.00,0.025), 1-seg(p,0.125,0.155));
+  const live=p>=0.04;
+  const left=Math.min(X0,ex),top=Math.min(Y0,ey),w=Math.abs(ex-X0),h=Math.abs(ey-Y0);
+  marquee.style.left=left+'px';marquee.style.top=top+'px';marquee.style.width=w+'px';marquee.style.height=h+'px';
+  marquee.style.opacity=live?(1-seg(p,0.125,0.155)):0;
+  badge.textContent=`${Math.round(w)} × ${Math.round(h)}`;
+  badge.style.opacity=(w>40&&h>30)?1:0;   // hide the 0×0 badge at drag start
+  const fl=seg(p,0.105,0.145); flash.style.opacity=(fl>0&&fl<1)?Math.sin(fl*Math.PI)*0.4:0;
+
+  // ── PANEL in / out ──
+  const ap=easeOut(seg(p,0.15,0.22));
+  const out=easeInOut(seg(p,0.95,1.0));
+  panel.style.opacity=ap*(1-out);
+  panel.style.transform=`translateY(${lerp(14,0,ap)+out*10}px) scale(${lerp(0.94,1,ap)*lerp(1,0.97,out)})`;
+
+  // ── TARGET CYCLE (⌘→ web-frontend → api-server) ──
+  // Sequenced (not crossfaded) so the two labels never overlap into a jumble:
+  // web-frontend slides out left, THEN api-server slides in from the right.
+  const aOut=easeInOut(seg(p,0.30,0.335));
+  const bIn=easeInOut(seg(p,0.335,0.37));
+  idA.style.opacity=1-aOut; idA.style.transform=`translateX(${-30*aOut}px)`;
+  idB.style.opacity=bIn;    idB.style.transform=`translateX(${30*(1-bIn)}px)`;
+  const onApi = p>=0.335;
+  cyc.textContent = (onApi?'2/2':'1/2')+' ⌘ ←→';
+  cyc.style.opacity = easeOut(seg(p,0.25,0.30)) * (1-out);
+  s2.textContent = '→ ' + (onApi?'api-server':'web-frontend');
+
+  // ── TYPING → hold → SEND ──
+  const typing=seg(p,0.41,0.54);
+  ibox.classList.toggle('focus', p>=0.40 && p<0.60);
+  if(p>=0.60 && p<0.69){
+    ibox.innerHTML='<span style="color:var(--mint)">✓ Sent to api-server</span>';
+  } else if(p>=0.41 && p<0.60){
+    const n=Math.floor(typing*MSG.length);
+    ibox.innerHTML='<span class="typed">'+esc(MSG.slice(0,n))+'</span><span class="icaret"></span>';
+  } else {
+    ibox.innerHTML='<span class="ph">Tell Claude what to do…</span>';
+  }
+  const pulse=(p>=0.58&&p<0.62)?Math.sin((p-0.58)/0.04*Math.PI)*0.18:0;
+  snd.style.transform=`scale(${1+pulse})`;
+
+  // ── RESPONSE stream ──
+  const stream=seg(p,0.60,0.86);   // steady
+  const idleLine = onApi ? '▶▶ auto mode on (shift+tab to cycle)' : '▶▶ vite dev server ready on :5173';
+  if(p<0.60){ mir.innerHTML='<span class="m">'+idleLine+'</span>'; }
+  else { renderMir(stream, p<0.86); }
+
+  // ── STATUS badge ──
+  if(p<0.60){ stateBadge.style.opacity=0; stateBadge.style.transform='none'; }
+  else if(p<0.86){ stateBadge.style.opacity=1; stateBadge.textContent='◌ Working';
+    stateBadge.style.color='var(--muted)'; stateBadge.style.background='rgba(255,255,255,.07)'; stateBadge.style.transform='none'; }
+  else { stateBadge.style.opacity=1; stateBadge.textContent='✓ Done';
+    stateBadge.style.color='var(--mint)'; stateBadge.style.background='rgba(95,227,161,.14)';
+    const pop=seg(p,0.86,0.91); stateBadge.style.transform=`scale(${1+Math.sin(pop*Math.PI)*0.13})`; }
+
+  // ── KEYCAP captions ──
+  const capV=Math.min(seg(p,0.00,0.02), 1-seg(p,0.085,0.115));
+  const cycV=Math.min(seg(p,0.26,0.285), 1-seg(p,0.37,0.40));
+  const sndV=Math.min(seg(p,0.555,0.575), 1-seg(p,0.63,0.66));
+  let kv=0;
+  if(capV>0.001){ keycap.innerHTML=keycapHTML(['⌥','⇧','4'],'capture'); kv=capV; }
+  else if(cycV>0.001){ keycap.innerHTML=keycapHTML(['⌘','→'],'switch target'); kv=cycV; }
+  else if(sndV>0.001){ keycap.innerHTML=keycapHTML(['↵'],'send'); kv=sndV; }
+  keycap.style.opacity=kv;
+};
+window.setProgress(0);
+</script>
+</body>
+</html>
