@@ -36,11 +36,13 @@ public enum AgentState: String, Sendable, Equatable, CaseIterable {
     }
 
     /// Maps a hook event name to a state. Unrecognized events leave state unchanged
-    /// (returns nil) so schema drift degrades gracefully.
+    /// (returns nil) so schema drift degrades gracefully. State is driven entirely by
+    /// these real events — never by mirror activity (an idle terminal still repaints).
     public static func from(event: String) -> AgentState? {
         switch event {
-        case "Stop": return .finished
-        case "Notification": return .waitingForInput
+        case "UserPromptSubmit", "PreToolUse": return .working   // Claude is actively doing something
+        case "Notification": return .waitingForInput            // asking for input / permission
+        case "Stop": return .finished                           // turn complete
         default: return nil
         }
     }
