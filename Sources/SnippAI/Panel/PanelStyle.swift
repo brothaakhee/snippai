@@ -4,10 +4,20 @@ import SwiftUI
 enum PanelStyle {
     /// The single horizontal content inset every section aligns to.
     static let contentInset: CGFloat = 16
+    /// The single vertical inset every chrome row (title/target/input) hangs off,
+    /// so the panel reads as one consistent rhythm.
+    static let rowPadV: CGFloat = 11
     /// Radius ramp: inner controls / cards / panel.
     static let controlRadius: CGFloat = 8
     static let cardRadius: CGFloat = 10
     static let panelRadius: CGFloat = 14
+
+    /// SnippAI's mint accent — used app-wide via `.tint` (send button, selection,
+    /// focus). Matches the marketing site.
+    static let accent = Color(red: 95/255, green: 227/255, blue: 161/255)
+    /// The flat dark panel surface (matches the site's mock — not the translucent
+    /// system material, which washes out over a dark desktop).
+    static let surface = Color(red: 16/255, green: 18/255, blue: 22/255)
 
     /// Dynamic Type band the compact panel/onboarding support. We honor the full
     /// standard text-size slider but cap the giant accessibility sizes, which would

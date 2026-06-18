@@ -22,8 +22,8 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     private static let widthKey = "panelWidth"
     private static let heightKey = "panelHeight"
-    private static let defaultSize = NSSize(width: 420, height: 560)
-    private static let minSize = NSSize(width: 360, height: 360)
+    private static let defaultSize = NSSize(width: 540, height: 600)
+    private static let minSize = NSSize(width: 420, height: 420)
 
     init(model: AppModel) {
         self.model = model
@@ -82,6 +82,9 @@ final class PanelController: NSObject, NSWindowDelegate {
             backing: .buffered, defer: false)
         panel.minSize = Self.minSize
         panel.delegate = self
+        // Always dark, regardless of the system appearance, so AppKit-drawn bits
+        // (text cursor, scrollers, input text) match the flat dark SwiftUI surface.
+        panel.appearance = NSAppearance(named: .darkAqua)
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = true

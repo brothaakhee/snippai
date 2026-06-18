@@ -156,7 +156,7 @@ private struct SessionRow: View {
         Button(action: action) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: session.looksLikeAgent ? "sparkles" : "terminal")
-                    .foregroundStyle(session.looksLikeAgent ? Color.accentColor : .secondary)
+                    .foregroundStyle(session.looksLikeAgent ? PanelStyle.accent : .secondary)
                     .scaledFont(14)
                     .frame(width: iconWidth)
                     .padding(.top, 1)
@@ -169,8 +169,8 @@ private struct SessionRow: View {
                             Text(session.jobName)
                                 .scaledFont(10, weight: .medium)
                                 .padding(.horizontal, 5).padding(.vertical, 1)
-                                .background(Color.accentColor.opacity(0.18), in: Capsule())
-                                .foregroundStyle(Color.accentColor)
+                                .background(PanelStyle.accent.opacity(0.18), in: Capsule())
+                                .foregroundStyle(PanelStyle.accent)
                         }
                     }
                     Text(session.disambiguator)
@@ -197,12 +197,12 @@ private struct SessionRow: View {
             .padding(10)
             .background(
                 RoundedRectangle(cornerRadius: PanelStyle.cardRadius)
-                    .fill(isSelected ? Color.accentColor.opacity(0.16)
+                    .fill(isSelected ? PanelStyle.accent.opacity(0.16)
                           : (hovering ? Color.primary.opacity(0.06) : Color.clear))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: PanelStyle.cardRadius)
-                    .strokeBorder(isSelected ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 1)
+                    .strokeBorder(isSelected ? PanelStyle.accent.opacity(0.5) : Color.clear, lineWidth: 1)
             )
             .contentShape(Rectangle())
         }
@@ -239,7 +239,7 @@ private struct SessionRow: View {
         }
         for (offset, index) in zip(0..., attr.characters.indices) where offset < marked.count && marked[offset] {
             let next = attr.characters.index(after: index)
-            attr[index..<next].foregroundColor = .accentColor
+            attr[index..<next].foregroundColor = PanelStyle.accent
         }
         return attr
     }
