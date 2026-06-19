@@ -18,8 +18,10 @@ public enum HookInstallError: Error, LocalizedError {
 /// existing `hooks` arrays (never clobber), be idempotent, and remove exactly our
 /// own entries on uninstall. No FileWatcher / self-heal / orphan cleanup.
 public struct HookInstaller {
-    /// Hook events SnippAI registers. Both are read-only/non-blocking signals.
-    public static let events = ["Stop", "Notification"]
+    /// Hook events SnippAI registers — all read-only/non-blocking signals that drive
+    /// the status badge: UserPromptSubmit/PreToolUse → working, Notification → needs
+    /// you, Stop → done.
+    public static let events = ["UserPromptSubmit", "PreToolUse", "Notification", "Stop"]
 
     public let settingsURL: URL
     public let scriptURL: URL

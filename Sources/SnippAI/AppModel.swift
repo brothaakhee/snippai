@@ -236,7 +236,6 @@ final class AppModel {
                     guard let self, self.streamGeneration == generation else { return }
                     self.screen = snapshot
                     self.screenCache[sessionID] = snapshot
-                    self.reconcileStateWithMirror(sessionID: sessionID)
                 }
                 // Stream ended without an error → the connection dropped (e.g. iTerm
                 // restarted). Surface it instead of freezing on the last frame.
@@ -287,10 +286,10 @@ final class AppModel {
             screenshotURLs = []     // consumed — next prompt starts clean
             mirrorScrollTick += 1   // snap the mirror to the tail to show the result
             statusMessage = "Sent to \(selectedSession?.folderName ?? "session")"
-            // We just gave this session work → it's busy again. Clears any prior
-            // "needs you"/"done" badge (and the menu-bar dot) until the next hook event.
-            agentStates[sessionID] = AgentStateEntry(state: .working, lastEventAt: Date())
-            notifyAttention()
+            // Don't fake a "Working" badge here: the status badge is purely hook-driven.
+            // If the integration is enabled, the sent prompt fires UserPromptSubmit →
+            // Working → Stop → Done on its own. If it's off, there's no badge to clear
+            // and faking one would get stuck forever (no Stop event ever arrives).
         } catch {
             connectionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
@@ -372,22 +371,4 @@ final class AppModel {
         }
     }
 
-    /// Fresh mirror output means Claude is doing something, so a prior "done"/"needs
-    /// you" badge has gone stale (e.g. the user answered a prompt directly in the
-    /// terminal). Clear it — but guardedly: a `.waitingForInput` prompt TUI repaints
-    /// (spinner/cursor) within milliseconds, so only treat output that arrives a
-    /// beat AFTER the event as real progress; `.finished` clears immediately since
-    /// nothing repaints after Stop.
-    private func reconcileStateWithMirror(sessionID: String) {
-        guard let entry = agentStates[sessionID] else { return }
-        let stale: Bool
-        switch entry.state {
-        case .finished: stale = true
-        case .waitingForInput: stale = Date().timeIntervalSince(entry.lastEventAt) > 2.0
-        case .working, .unknown: stale = false
-        }
-        guard stale else { return }
-        agentStates[sessionID] = AgentStateEntry(state: .working, lastEventAt: Date())
-        notifyAttention()
-    }
 }

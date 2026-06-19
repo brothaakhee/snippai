@@ -67,7 +67,9 @@ final class AgentStateTests: XCTestCase {
     func testEventMapping() {
         XCTAssertEqual(AgentState.from(event: "Stop"), .finished)
         XCTAssertEqual(AgentState.from(event: "Notification"), .waitingForInput)
-        XCTAssertNil(AgentState.from(event: "PreToolUse"))   // schema drift → ignored
+        XCTAssertEqual(AgentState.from(event: "UserPromptSubmit"), .working)
+        XCTAssertEqual(AgentState.from(event: "PreToolUse"), .working)
+        XCTAssertNil(AgentState.from(event: "PostToolUse"))   // unmapped → ignored (no false state)
     }
 
     func testNeedsAttention() {
