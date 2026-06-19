@@ -13,3 +13,8 @@ DerivedData/
 .build/
 build/
 screenshots/
+
+# demo video tooling — keep source (demo.html, render.mjs, package.json) + the
+# served assets in site/, ignore the heavy generated output + deps
+tools/demo/node_modules/
+tools/demo/out/
