@@ -36,7 +36,13 @@ enum DesktopInjector {
     }
 
     static func inject(text: String, sessionID: String) async throws {
-        guard AXIsProcessTrusted() else { throw DesktopInjectError.notTrusted }
+        // Accessibility is required to post the synthetic ⌘V/Return. If it's missing,
+        // guide the user right here (system prompt + deep-link) instead of failing mute.
+        guard PermissionsService.isAccessibilityTrusted() else {
+            PermissionsService.requestAccessibility()
+            PermissionsService.openAccessibilitySettings()
+            throw DesktopInjectError.notTrusted
+        }
         guard let claude = NSRunningApplication
             .runningApplications(withBundleIdentifier: claudeBundleID).first
         else { throw DesktopInjectError.notRunning }
@@ -56,7 +62,14 @@ enum DesktopInjector {
         // Let the chat input take key focus before pasting.
         try? await Task.sleep(nanoseconds: 250_000_000)
 
-        // 3. Clipboard: snapshot the user's, set ours, paste, submit, then restore.
+        // 3. Re-verify Claude is STILL frontmost immediately before synthesizing keys.
+        // CGEvent posts to the system foreground (not a targeted window), so if focus
+        // shifted during activation/settle (⌘-Tab, an alert stealing focus, a crash),
+        // ⌘V+Return would land in the wrong app. Bail instead — before touching the
+        // clipboard, so the user's clipboard is never even disturbed on this path.
+        guard frontmostIsClaude() else { throw DesktopInjectError.didNotFocus }
+
+        // 4. Clipboard: snapshot the user's, set ours, paste, submit, then restore.
         let pasteboard = NSPasteboard.general
         let saved = snapshotPasteboard()
         pasteboard.clearContents()
@@ -64,6 +77,10 @@ enum DesktopInjector {
 
         postKey(0x09, command: true)   // ⌘V
         try? await Task.sleep(nanoseconds: 120_000_000)
+        // Re-check before Return too: focus could shift in the inter-key gap, and a
+        // stray Return in another app is the worst stray keypress. If it shifted, the
+        // paste already landed in Claude (harmless); just skip the submit + restore.
+        guard frontmostIsClaude() else { restorePasteboard(saved); throw DesktopInjectError.didNotFocus }
         postKey(0x24, command: false)  // Return (submit)
 
         // Restore after the paste has consumed the clipboard.
@@ -87,13 +104,15 @@ enum DesktopInjector {
     }
 
     /// AppleScript `activate` reliably pulls Claude out of a fullscreen Space when
-    /// `NSRunningApplication.activate` alone doesn't (observed in testing).
+    /// `NSRunningApplication.activate` alone doesn't (observed in testing). Fire-and-
+    /// forget — never `waitUntilExit()` here: this runs on the main actor and the
+    /// caller already polls `waitUntilFrontmost` for the result, so blocking would
+    /// just freeze the UI for the subprocess's lifetime.
     private static func activateViaAppleScript() {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         process.arguments = ["-e", "tell application id \"\(claudeBundleID)\" to activate"]
         try? process.run()
-        process.waitUntilExit()
     }
 
     // MARK: - Synthetic keys (requires Accessibility)

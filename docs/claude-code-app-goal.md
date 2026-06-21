@@ -131,19 +131,28 @@ tool-call/result chips, collapsible thinking) — replacing the brittle TUI scra
   so a terminal target never mirrors the desktop's chat).
 - Verified rendering three distinct real conversations (live terminal, tg-brain, desktop).
 
-### Screenshot → inject (must-have #1) — ✅ terminal; desktop mirror-only
+### Screenshot → inject (must-have #1) — ✅ terminal AND desktop
 - **Terminal:** existing iTerm2 + Terminal.app adapters inject into the *existing* running session
   (PTY via the emulator API — the only OS-level path; proven by `spike_iterm.py`). The inject-aware
   default selection auto-targets an injectable Claude session; send is enabled.
-- **Desktop:** `ClaudeDesktopAdapter` discovers the foreground session from the `claude-code-sessions`
-  registry and mirrors it, but is **mirror-only** — inject has no smooth/supported path (Electron
-  socketpair stdin; CGEvent/CDP/`claude://`/MCP all rejected in the matrix). UI cleanly gates send
-  ("Mirror only — type in the Claude app") and `focus()` deep-links via `claude://chat/<id>`.
+- **Desktop:** ✅ **working.** `ClaudeDesktopAdapter` discovers the foreground session from the
+  `claude-code-sessions` registry, mirrors it, AND injects via `DesktopInjector` (app-layer UI
+  automation — the only viable path; Electron socketpair stdin, opaque web content, and
+  CDP/`claude://`/MCP were all rejected in the matrix). The foreground desktop session runs on the
+  **host**, so a host `/tmp` screenshot is readable by its `Read` tool — same `message + screenshot
+  path` format as terminals. Recipe: `claude://chat/<id>` (focus) → activate → set `NSPasteboard` →
+  CGEvent ⌘V → CGEvent Return; the input auto-focuses on window focus (no click). Frontmost is
+  re-verified immediately before each synthetic keypress so keys can never land in the wrong app.
+  Requires a one-time **Accessibility** grant (prompted just-in-time). **Proven end-to-end against
+  the live app:** an injected message landed as a user turn and the agent `Read` a test PNG, replying
+  with the exact marker. `supportsInject:true`, `hasScreenStream:false` (display = transcript mirror).
 
 ### Method
 Adversarial multi-agent loops at every step (Phase-0 recon 23 agents; mirror-core review 4 agents →
-fixed 1 critical + 1 latent; desktop-discovery review 4 agents → fixed 2 high + 2 medium). Two bugs
-were caught only by running the **real app**: a `deinit` dispatch-deadlock and cross-session event bleed.
+fixed 1 critical + 1 latent; desktop-discovery review 4 agents → fixed 2 high + 2 medium; desktop-inject
+review 19 agents → fixed a TOCTOU focus race + a main-thread block). Bugs caught only by running the
+**real app**: a `deinit` dispatch-deadlock and cross-session event bleed. Desktop inject was de-risked
+against the live app *before* building (proved the paste+read loop), then re-verified after each change.
 
 ### Known follow-ups (documented, not blocking)
 - Terminal adapters beyond iTerm/Terminal (tmux `send-keys`, WezTerm/kitty CLIs) — not built: the
