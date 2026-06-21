@@ -84,8 +84,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 .split(separator: ",").map { URL(fileURLWithPath: String($0)) }
             Task {
                 await model.beginSession(screenshots: samples)
+                // Debug: mirror a specific real transcript as native chat so it can be
+                // screenshotted without a live hook/turn.
+                if let path = ProcessInfo.processInfo.environment["SNIPPAI_MIRROR_TRANSCRIPT"], !path.isEmpty {
+                    model.debugMirrorTranscript(path: path)
+                }
                 panelController.show(onClose: {})
             }
+        }
+
+        // Debug: end-to-end desktop inject. Discovers the foreground desktop session
+        // and sends a test message through the real adapter path, then exits — so the
+        // inject mechanism can be verified against the live Claude app (observe the
+        // session's transcript JSONL). Usage: SNIPPAI_TEST_DESKTOP_INJECT="<message>"
+        if let msg = ProcessInfo.processInfo.environment["SNIPPAI_TEST_DESKTOP_INJECT"], !msg.isEmpty {
+            Task { await runDesktopInjectSelfTest(msg) }
+        }
+    }
+
+    /// Discovers the Claude desktop session and injects `message` via the live path.
+    /// Writes the outcome to /tmp/snippai-inject-test.log (GUI-app stdout isn't a tty).
+    private func runDesktopInjectSelfTest(_ message: String) async {
+        func report(_ line: String) {
+            try? (line + "\n").write(toFile: "/tmp/snippai-inject-test.log", atomically: true, encoding: .utf8)
+        }
+        if !PermissionsService.isAccessibilityTrusted() {
+            PermissionsService.requestAccessibility()
+            report("DESKTOP_INJECT_FAIL accessibility-not-granted (prompted; grant SnippAI then re-run)")
+            return
+        }
+        let desktop = ClaudeDesktopAdapter(inject: DesktopInjector.make())
+        do {
+            let sessions = try await desktop.discover()   // already sorted most-recently-focused first
+            let pin = ProcessInfo.processInfo.environment["SNIPPAI_TEST_DESKTOP_SESSION"]
+            guard let target = (pin.flatMap { id in sessions.first { $0.id == id } }) ?? sessions.first else {
+                report("DESKTOP_INJECT_FAIL no-desktop-session"); return
+            }
+            try await desktop.send(text: message, toSession: target.id)
+            report("DESKTOP_INJECT_OK target=\(target.id) cwd=\(target.cwd)")
+        } catch {
+            report("DESKTOP_INJECT_FAIL \((error as? LocalizedError)?.errorDescription ?? "\(error)")")
         }
     }
 

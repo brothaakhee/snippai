@@ -180,7 +180,10 @@ private struct ComposeView: View {
             targetBar
             // The mirror is an inset, rounded "screen" rather than a full-bleed
             // opaque slab butting against the material — no bracketing dividers.
-            TerminalMirrorView(screen: model.screen, scrollKey: model.mirrorScrollKey)
+            // Prefer the native-chat transcript mirror (works for terminal AND the
+            // desktop app); fall back to the faithful TUI mirror for sessions with no
+            // resolvable transcript (e.g. a non-Claude terminal).
+            mirror
                 .clipShape(RoundedRectangle(cornerRadius: PanelStyle.controlRadius))
                 .overlay(RoundedRectangle(cornerRadius: PanelStyle.controlRadius)
                     .strokeBorder(.white.opacity(0.06), lineWidth: 1))
@@ -192,6 +195,14 @@ private struct ComposeView: View {
         .onExitCommand { model.backToPicker() }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) { Divider().opacity(0.4); inputBar }
+        }
+    }
+
+    @ViewBuilder private var mirror: some View {
+        if model.conversation.hasVisibleContent {
+            ConversationMirrorView(store: model.conversation, scrollKey: model.mirrorScrollKey)
+        } else {
+            TerminalMirrorView(screen: model.screen, scrollKey: model.mirrorScrollKey)
         }
     }
 
@@ -353,7 +364,11 @@ private struct ComposeView: View {
 
     @ViewBuilder
     private var footer: some View {
-        if model.justSent {
+        if model.selectedSession?.supportsInject == false {
+            Label("Mirror only — type in the Claude app to reply", systemImage: "eye")
+                .scaledFont(10).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else if model.justSent {
             Label(model.statusMessage ?? "Sent — watch Claude work above", systemImage: "checkmark.circle.fill")
                 .font(.caption).foregroundStyle(.green)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -368,7 +383,9 @@ private struct ComposeView: View {
     }
 
     private var canSend: Bool {
-        !model.isSending && (!model.messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !model.screenshotURLs.isEmpty)
+        !model.isSending
+            && model.selectedSession?.supportsInject != false   // mirror-only targets can't receive input
+            && (!model.messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !model.screenshotURLs.isEmpty)
     }
 
     private func send() {
