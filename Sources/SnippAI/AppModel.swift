@@ -280,7 +280,17 @@ final class AppModel {
 
     private func startComposing(sessionID: String) {
         phase = .composing
-        bindTranscriptMirror(forSession: sessionID)
+        // The faithful, cell-accurate terminal mirror is the display for sessions with
+        // a real screen (iTerm/Terminal) — it shows exactly what's on screen, ANSI and
+        // all. The transcript-driven native chat is ONLY for targets that have no
+        // terminal screen to mirror (the Claude desktop app); using it for terminals
+        // would replace the true render with a less-faithful reconstruction.
+        if sessions.first(where: { $0.id == sessionID })?.hasScreenStream == false {
+            bindTranscriptMirror(forSession: sessionID)
+        } else {
+            transcriptMirror.stop()
+            conversation.reset()
+        }
         // Show this session's last-known frame instantly (keyed by session, so it's
         // never another session's content) — only fall back to the "Connecting…"
         // placeholder for a target we haven't mirrored yet. Keeps cycling smooth.

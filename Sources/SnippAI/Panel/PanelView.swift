@@ -199,7 +199,11 @@ private struct ComposeView: View {
     }
 
     @ViewBuilder private var mirror: some View {
-        if model.conversation.hasVisibleContent {
+        // Terminal sessions have a true, cell-accurate screen — always show that
+        // faithful TUI mirror. The transcript-driven native chat is only for targets
+        // with no terminal screen (the Claude desktop app), or the debug viewer
+        // (no selected session). `hasScreenStream != true` covers both.
+        if model.conversation.hasVisibleContent, model.selectedSession?.hasScreenStream != true {
             ConversationMirrorView(store: model.conversation, scrollKey: model.mirrorScrollKey)
         } else {
             TerminalMirrorView(screen: model.screen, scrollKey: model.mirrorScrollKey)
