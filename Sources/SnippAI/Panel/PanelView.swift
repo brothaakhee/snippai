@@ -166,6 +166,27 @@ private struct AddScreenshotButton: View {
     }
 }
 
+/// The app a session lives in, as a small colored capsule. Terminals share one
+/// color; the Claude desktop app gets its own so it stands apart in the picker/header.
+private struct SourceBadge: View {
+    let source: String
+
+    private var color: Color {
+        source == "Claude Desktop"
+            ? Color(red: 0.78, green: 0.66, blue: 1.0)   // violet — the desktop app
+            : Color(red: 0.49, green: 0.76, blue: 1.0)   // blue — iTerm2 / Terminal.app
+    }
+
+    var body: some View {
+        Text(source)
+            .scaledFont(10, weight: .semibold)
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(color.opacity(0.16), in: Capsule())
+            .foregroundStyle(color)
+            .fixedSize()
+    }
+}
+
 private struct ComposeView: View {
     @Bindable var model: AppModel
     @State private var inputFocused = false
@@ -235,23 +256,25 @@ private struct ComposeView: View {
     }
 
     private func targetIdentity(session: TerminalSession?, state: AgentState) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 7) {
             Image(systemName: session?.looksLikeAgent == true ? "sparkles" : "terminal")
                 .foregroundStyle(session?.looksLikeAgent == true ? PanelStyle.accent : .secondary)
                 .scaledFont(12)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(session?.folderName ?? "session")
-                    .scaledFont(12, weight: .semibold)
-                    .lineLimit(1)
-                Text(session?.disambiguator ?? "")
-                    .scaledFont(10).foregroundStyle(.secondary)
-                    .lineLimit(1)
+            Text(session?.folderName ?? "session")
+                .scaledFont(13, weight: .semibold)
+                .lineLimit(1)
+            // Which app the session lives in, as a colored badge (distinct from the
+            // mint shortcut pill). Window/tab moves to a hover tooltip; the running
+            // job (e.g. sourcekit-lsp) is dropped — it's incidental, not useful.
+            if let src = session?.source, !src.isEmpty {
+                SourceBadge(source: src)
             }
             // Hook-derived semantic state (Done / Needs you), when known. (No generic
             // "live" pulse — a blinking green dot reads as "the agent is working" even
             // when the session is idle; the mirror updating is itself the liveness cue.)
             AgentStateBadge(state: state)
         }
+        .help(session?.locationLabel ?? "")
     }
 
     @ViewBuilder

@@ -58,6 +58,15 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
         return ["claude", "codex", "aider", "cursor", "goose", "ollama"].contains { job.contains($0) }
     }
 
+    /// Window/tab/pane position for a hover tooltip. Empty when there's no meaningful
+    /// terminal position (e.g. the Claude desktop app, which has no window/tab).
+    public var locationLabel: String {
+        guard hasScreenStream else { return "" }
+        var parts = ["Window \(windowNumber) · Tab \(tabIndex + 1)"]
+        if paneIndex > 0 { parts.append("Pane \(paneIndex + 1)") }
+        return parts.joined(separator: " · ")
+    }
+
     /// Disambiguating sublabel given multiple sessions can share a cwd.
     public var disambiguator: String {
         var parts: [String] = []
