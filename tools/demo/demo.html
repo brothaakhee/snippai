@@ -5,7 +5,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 <style>
 :root{
-  --mint:#5fe3a1; --amber:#ffb45a; --ink:#f2f2f0; --muted:#9aa1ab; --faint:#5d5d63;
+  --mint:#5fe3a1; --amber:#ffb45a; --blue:#7cc3ff; --violet:#c7a8ff;
+  --ink:#f2f2f0; --muted:#9aa1ab; --faint:#5d5d63;
   --mono:"JetBrains Mono",monospace; --body:"Hanken Grotesk",sans-serif; --line:#23272f;
 }
 *{margin:0;box-sizing:border-box}
@@ -44,27 +45,31 @@ html,body{background:#000}
 #flash{position:absolute; inset:0; background:var(--mint); opacity:0; border-radius:2px}
 #cursor{position:absolute; z-index:9; left:0; top:0; width:22px; height:22px; will-change:transform}
 
-/* SnippAI panel mock */
+/* SnippAI panel mock (current design: colored source badge, bigger thumbnails) */
 #panelWrap{position:absolute; left:50%; top:50%; z-index:10; transform:translate(-50%,-50%)}
-#panel{width:520px; background:#101216; border:1px solid #23272f; border-radius:14px; overflow:hidden;
+#panel{width:540px; background:#101216; border:1px solid #23272f; border-radius:14px; overflow:hidden;
   font-size:13px; opacity:0; box-shadow:0 50px 110px -40px rgba(0,0,0,.95)}
-.pbar{display:flex; align-items:center; gap:9px; padding:12px 14px; border-bottom:1px solid var(--line)}
-.thumb{width:40px;height:28px;border-radius:5px;border:1px solid #2d323c;background:linear-gradient(135deg,#1a2230,#0d1016)}
-.tadd{width:22px;height:28px;border:1px dashed #2d323c;border-radius:5px;display:grid;place-items:center;color:var(--faint);font-size:14px}
+.pbar{display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid var(--line)}
+.thumbs{display:flex;gap:6px}
+.thumb{width:54px;height:38px;border-radius:7px;border:1px solid #2d323c;background:linear-gradient(135deg,#26313e,#0e1116)}
+.thumb.b{background:linear-gradient(135deg,#372a3f,#140e16)}
+.tadd{width:30px;height:38px;border:1px dashed #2d323c;border-radius:7px;display:grid;place-items:center;color:var(--faint);font-size:16px}
 .pbar .nm{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--ink)}
 .pbar .s2{font-family:var(--mono);font-size:11px;color:var(--faint)}
 .pbar .x{margin-left:auto;color:var(--faint)}
-.thumbs{display:flex;gap:5px}
-.ptarget{display:flex;align-items:center;gap:9px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--ink);height:42px}
-#idwrap{position:relative;flex:1;height:30px;overflow:hidden}
-.ident{position:absolute;left:0;top:0;width:100%;display:flex;flex-direction:column;justify-content:center;height:30px}
-.ident .l1{display:flex;align-items:center;gap:7px}
-.ptarget .sp{color:var(--mint)} .ident .nm{font-weight:600}
-.ident .mt{color:var(--faint);font-family:var(--mono);font-size:10.5px;margin-top:1px}
-#cyc{font-family:var(--mono);font-size:10px;color:var(--faint);opacity:0;white-space:nowrap}
-#stateBadge{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;font-weight:600;padding:2px 8px;border-radius:999px;opacity:0;white-space:nowrap}
+.ptarget{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--ink);height:44px}
+.ptarget .sp{color:var(--mint)}
+#idwrap{position:relative;height:20px;min-width:220px;overflow:hidden}
+.ident{position:absolute;left:0;top:0;display:flex;align-items:center;gap:8px;height:20px;white-space:nowrap}
+.ident .nm{font-weight:600}
+.srcbadge{font-family:var(--mono);font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px}
+.srcbadge.iterm{color:var(--blue);background:rgba(124,195,255,.14)}
+.srcbadge.desktop{color:var(--violet);background:rgba(199,168,255,.14)}
+#cyc{margin-left:auto;font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--mint);background:rgba(95,227,161,.14);padding:2px 9px;border-radius:99px;opacity:0;white-space:nowrap}
+#stateBadge{font-family:var(--mono);font-size:10.5px;font-weight:600;padding:2px 9px;border-radius:99px;opacity:0;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.spk{width:11px;height:11px;border-radius:50%;border:2px solid rgba(255,255,255,.2);border-top-color:var(--muted);display:inline-block}
 .mir{background:#08090b;padding:14px 16px;font-family:var(--mono);font-size:11.5px;line-height:1.8;color:#c4c8ce;height:210px;overflow:hidden;white-space:pre-wrap}
-.mir .g{color:var(--mint)} .mir .a{color:var(--amber)} .mir .b{color:#7cc3ff} .mir .m{color:var(--faint)} .mir .u{color:#c4c8ce}
+.mir .g{color:var(--mint)} .mir .a{color:var(--amber)} .mir .b{color:var(--blue)} .mir .m{color:var(--faint)} .mir .u{color:#c4c8ce}
 .caret{display:inline-block;width:7px;height:13px;background:var(--mint);vertical-align:-2px}
 .pin{display:flex;align-items:center;gap:10px;padding:12px 14px}
 .pin .bx{flex:1;background:rgba(255,255,255,.04);border:1px solid #2d323c;border-radius:9px;padding:9px 12px;font-size:12.5px;min-height:34px;display:flex;align-items:center}
@@ -105,18 +110,18 @@ html,body{background:#000}
 
   <div id="panelWrap"><div id="panel">
     <div class="pbar">
-      <div class="thumbs"><div class="thumb"></div><div class="tadd">+</div></div>
-      <div><div class="nm">SnippAI</div><div class="s2" id="s2">→ web-frontend</div></div>
+      <div class="thumbs"><div class="thumb"></div><div class="thumb b"></div><div class="tadd">+</div></div>
+      <div><div class="nm">SnippAI</div><div class="s2" id="s2">→ claude-chat</div></div>
       <div class="x">✕</div>
     </div>
     <div class="ptarget">
       <span class="sp">✦</span>
       <div id="idwrap">
-        <div class="ident" id="idA"><div class="l1"><span class="nm">web-frontend</span></div><div class="mt">iTerm2 · vite · win 0·tab 1</div></div>
-        <div class="ident" id="idB"><div class="l1"><span class="nm">api-server</span></div><div class="mt">iTerm2 · claude · win 0·tab 2</div></div>
+        <div class="ident" id="idA"><span class="nm">claude-chat</span><span class="srcbadge desktop">Claude Desktop</span></div>
+        <div class="ident" id="idB"><span class="nm">api-server</span><span class="srcbadge iterm">iTerm2</span></div>
       </div>
-      <span id="cyc">1/2 ⌘←→</span>
-      <span id="stateBadge">◌ Working</span>
+      <span id="cyc">1/2 ⌘ ←→</span>
+      <span id="stateBadge"></span>
     </div>
     <div class="mir" id="mir"></div>
     <div class="pin">
@@ -182,7 +187,7 @@ window.setProgress=function(p){
   marquee.style.left=left+'px';marquee.style.top=top+'px';marquee.style.width=w+'px';marquee.style.height=h+'px';
   marquee.style.opacity=live?(1-seg(p,0.125,0.155)):0;
   badge.textContent=`${Math.round(w)} × ${Math.round(h)}`;
-  badge.style.opacity=(w>40&&h>30)?1:0;   // hide the 0×0 badge at drag start
+  badge.style.opacity=(w>40&&h>30)?1:0;
   const fl=seg(p,0.105,0.145); flash.style.opacity=(fl>0&&fl<1)?Math.sin(fl*Math.PI)*0.4:0;
 
   // ── PANEL in / out ──
@@ -191,17 +196,15 @@ window.setProgress=function(p){
   panel.style.opacity=ap*(1-out);
   panel.style.transform=`translateY(${lerp(14,0,ap)+out*10}px) scale(${lerp(0.94,1,ap)*lerp(1,0.97,out)})`;
 
-  // ── TARGET CYCLE (⌘→ web-frontend → api-server) ──
-  // Sequenced (not crossfaded) so the two labels never overlap into a jumble:
-  // web-frontend slides out left, THEN api-server slides in from the right.
+  // ── TARGET CYCLE (⌘→ Claude Desktop → iTerm2) — shows both targets + colored badges ──
   const aOut=easeInOut(seg(p,0.30,0.335));
   const bIn=easeInOut(seg(p,0.335,0.37));
   idA.style.opacity=1-aOut; idA.style.transform=`translateX(${-30*aOut}px)`;
   idB.style.opacity=bIn;    idB.style.transform=`translateX(${30*(1-bIn)}px)`;
-  const onApi = p>=0.335;
-  cyc.textContent = (onApi?'2/2':'1/2')+' ⌘ ←→';
+  const onB = p>=0.335;
+  cyc.textContent = (onB?'2/2':'1/2')+' ⌘ ←→';
   cyc.style.opacity = easeOut(seg(p,0.25,0.30)) * (1-out);
-  s2.textContent = '→ ' + (onApi?'api-server':'web-frontend');
+  s2.textContent = '→ ' + (onB?'api-server':'claude-chat');
 
   // ── TYPING → hold → SEND ──
   const typing=seg(p,0.41,0.54);
@@ -217,19 +220,22 @@ window.setProgress=function(p){
   const pulse=(p>=0.58&&p<0.62)?Math.sin((p-0.58)/0.04*Math.PI)*0.18:0;
   snd.style.transform=`scale(${1+pulse})`;
 
-  // ── RESPONSE stream ──
-  const stream=seg(p,0.60,0.86);   // steady
-  const idleLine = onApi ? '▶▶ auto mode on (shift+tab to cycle)' : '▶▶ vite dev server ready on :5173';
-  if(p<0.60){ mir.innerHTML='<span class="m">'+idleLine+'</span>'; }
+  // ── RESPONSE stream (into the iTerm2 target) ──
+  const stream=seg(p,0.60,0.86);
+  if(p<0.60){ mir.innerHTML='<span class="m">▶▶ auto mode on (shift+tab to cycle)</span>'; }
   else { renderMir(stream, p<0.86); }
 
-  // ── STATUS badge ──
-  if(p<0.60){ stateBadge.style.opacity=0; stateBadge.style.transform='none'; }
-  else if(p<0.86){ stateBadge.style.opacity=1; stateBadge.textContent='◌ Working';
-    stateBadge.style.color='var(--muted)'; stateBadge.style.background='rgba(255,255,255,.07)'; stateBadge.style.transform='none'; }
-  else { stateBadge.style.opacity=1; stateBadge.textContent='✓ Done';
-    stateBadge.style.color='var(--mint)'; stateBadge.style.background='rgba(95,227,161,.14)';
-    const pop=seg(p,0.86,0.91); stateBadge.style.transform=`scale(${1+Math.sin(pop*Math.PI)*0.13})`; }
+  // ── STATUS badge: animated spinner while Working, ✓ Done after ──
+  if(p<0.60){ stateBadge.style.opacity=0; stateBadge.innerHTML=''; }
+  else if(p<0.86){
+    stateBadge.style.opacity=1; stateBadge.style.color='var(--muted)'; stateBadge.style.background='rgba(255,255,255,.07)'; stateBadge.style.transform='none';
+    const deg=Math.round(p*5400);   // deterministic continuous spin across frames
+    stateBadge.innerHTML='<span class="spk" style="transform:rotate('+deg+'deg)"></span> Working';
+  } else {
+    stateBadge.style.opacity=1; stateBadge.style.color='var(--mint)'; stateBadge.style.background='rgba(95,227,161,.14)';
+    stateBadge.innerHTML='✓ Done';
+    const pop=seg(p,0.86,0.91); stateBadge.style.transform=`scale(${1+Math.sin(pop*Math.PI)*0.13})`;
+  }
 
   // ── KEYCAP captions ──
   const capV=Math.min(seg(p,0.00,0.02), 1-seg(p,0.085,0.115));
