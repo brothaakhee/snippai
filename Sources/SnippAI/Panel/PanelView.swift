@@ -87,9 +87,9 @@ private struct TitleBar: View {
     private var attachments: some View {
         if model.screenshotURLs.isEmpty {
             Image(systemName: "camera.viewfinder")
-                .scaledFont(20)
+                .scaledFont(30)
                 .foregroundStyle(.secondary)
-                .frame(width: 60, height: 42)
+                .frame(width: 116, height: 82)
         } else {
             HStack(spacing: 6) {
                 ForEach(model.screenshotURLs, id: \.self) { url in
@@ -118,14 +118,14 @@ private struct ThumbnailChip: View {
                     Color.primary.opacity(0.08)
                 }
             }
-            .frame(width: 56, height: 40)
-            .clipShape(RoundedRectangle(cornerRadius: 7))
-            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.white.opacity(0.15)))
+            .frame(width: 112, height: 80)
+            .clipShape(RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(.white.opacity(0.15)))
 
             if hovering {
                 Button(action: onRemove) {
                     Image(systemName: "xmark.circle.fill")
-                        .scaledFont(13)
+                        .scaledFont(16)
                         .symbolRenderingMode(.palette)
                         .foregroundStyle(.white, .black.opacity(0.6))
                 }
@@ -151,14 +151,14 @@ private struct AddScreenshotButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "plus")
-                .scaledFont(14, weight: .medium)
+                .scaledFont(18, weight: .medium)
                 .foregroundStyle(.secondary)
-                .frame(width: 30, height: 40)
+                .frame(width: 44, height: 80)
                 .background(
-                    RoundedRectangle(cornerRadius: 7)
+                    RoundedRectangle(cornerRadius: 9)
                         .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3]))
                         .foregroundStyle(.secondary.opacity(0.5)))
-                .contentShape(RoundedRectangle(cornerRadius: 7))
+                .contentShape(RoundedRectangle(cornerRadius: 9))
         }
         .buttonStyle(.plain)
         .help("Add another screenshot (⌥⇧4)")
@@ -254,16 +254,18 @@ private struct ComposeView: View {
     private var switchControls: some View {
         HStack(spacing: 8) {
             if let pos = model.targetPosition, pos.total > 1 {
-                Text("\(pos.index)/\(pos.total)")
-                    .scaledFont(10, weight: .medium).monospacedDigit()
-                    .foregroundStyle(.tertiary)
-                    .contentTransition(.numericText())
-                    .accessibilityHidden(true)
-                Text("⌘ ←→")
-                    .scaledFont(10, design: .rounded)
-                    .foregroundStyle(.tertiary)
-                    .help("Switch target: ⌘← or ⌘↑ previous · ⌘→ or ⌘↓ next")
-                    .accessibilityHidden(true)
+                HStack(spacing: 6) {
+                    Text("\(pos.index)/\(pos.total)")
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                    Text("⌘ ←→")
+                }
+                .scaledFont(12, weight: .medium, design: .rounded)
+                .foregroundStyle(PanelStyle.accent)
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .background(PanelStyle.accent.opacity(0.14), in: Capsule())
+                .help("Switch target: ⌘← or ⌘↑ previous · ⌘→ or ⌘↓ next")
+                .accessibilityHidden(true)
             }
             Button("Change") { model.backToPicker() }
                 .scaledFont(11)
