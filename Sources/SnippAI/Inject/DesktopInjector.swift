@@ -30,6 +30,14 @@ enum DesktopInjectError: Error, LocalizedError {
 enum DesktopInjector {
     static let claudeBundleID = "com.anthropic.claudefordesktop"
 
+    /// The app the user was on when they captured (set by the capture flow, before
+    /// SnippAI's panel grabs focus). After injecting — which unavoidably brings the
+    /// Electron app frontmost so its web input can receive the paste — focus is
+    /// returned here, so the user stays on the screen they started from and watches
+    /// Claude's reply in SnippAI's floating mirror. Pure background inject isn't
+    /// possible: Chromium ignores synthetic key events unless its window is key.
+    static var returnToApp: NSRunningApplication?
+
     /// The closure handed to `ClaudeDesktopAdapter` at construction.
     static func make() -> DesktopInject {
         { text, sessionID in try await inject(text: text, sessionID: sessionID) }
@@ -83,8 +91,16 @@ enum DesktopInjector {
         guard frontmostIsClaude() else { restorePasteboard(saved); throw DesktopInjectError.didNotFocus }
         postKey(0x24, command: false)  // Return (submit)
 
-        // Restore after the paste has consumed the clipboard.
-        try? await Task.sleep(nanoseconds: 450_000_000)
+        // Return focus to the app the user was on when they captured, so they stay on
+        // their screen. Wait a beat so the Return registers in Claude first.
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        if let back = returnToApp, back.bundleIdentifier != claudeBundleID {
+            back.activate()
+        }
+        returnToApp = nil
+
+        // Restore the user's clipboard after the paste has consumed ours.
+        try? await Task.sleep(nanoseconds: 300_000_000)
         restorePasteboard(saved)
     }
 

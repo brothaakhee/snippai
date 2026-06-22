@@ -113,6 +113,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             report("DESKTOP_INJECT_FAIL accessibility-not-granted (prompted; grant SnippAI then re-run)")
             return
         }
+        // Debug: simulate "user was on Chrome" so the focus-restore can be verified.
+        if let app = ProcessInfo.processInfo.environment["SNIPPAI_TEST_RETURN_TO"] {
+            DesktopInjector.returnToApp = NSRunningApplication
+                .runningApplications(withBundleIdentifier: app).first
+        }
         let desktop = ClaudeDesktopAdapter(inject: DesktopInjector.make())
         do {
             let sessions = try await desktop.discover()   // already sorted most-recently-focused first
@@ -207,6 +212,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         isCapturing = true
+        // Remember the app the user is on right now (before our overlay/panel grabs
+        // focus), so a desktop-app inject can return them here afterward. Only on a
+        // fresh capture — an accumulate keeps the original return target.
+        if !panelController.isVisible {
+            DesktopInjector.returnToApp = NSWorkspace.shared.frontmostApplication
+        }
         // Note: we deliberately DON'T hide the panel here — the crosshair overlay
         // sits above it, so the user can re-capture (or capture the panel itself)
         // without it vanishing. They can drag the panel aside if it's in the way.
