@@ -22,7 +22,7 @@
 :root{
   /* neutral / light paper palette */
   --bg:#f5f4f0; --surface:#ffffff; --line:#e4e2db; --line2:#d3d0c7;
-  --ink:#1a1b1d; --muted:#6c6d72; --faint:#9a9aa0;
+  --ink:#1a1b1d; --muted:#6c6d72; --faint:#6e6f74;   /* faint passes WCAG AA (4.56:1 on bg) */
   /* restrained accents, tuned to read on a light background */
   --mint:#13a066; --blue:#2f7fd1; --violet:#7c5cf0;
   --display:"Archivo Expanded",sans-serif; --sans:"Archivo",sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
@@ -39,7 +39,13 @@ body::after{content:""; position:fixed; inset:0; z-index:-1; pointer-events:none
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='130' height='130'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 a{color:inherit;text-decoration:none}
 .wrap{width:100%; max-width:880px; margin-inline:auto; padding-inline:28px}
-@media(max-width:560px){.wrap{padding-inline:20px}}
+@media(max-width:560px){
+  .wrap{padding-inline:20px}
+  /* ≥44px touch targets on the small viewport without changing the desktop look */
+  .nav .dl{padding:12px 17px}
+  .foot a{display:inline-flex; align-items:center; min-height:44px; padding:0 4px}
+  .foot .links{gap:26px}
+}
 
 /* top bar */
 .navbar{position:sticky; top:0; z-index:50; background:rgba(245,244,240,.72); backdrop-filter:blur(12px); border-bottom:1px solid transparent; transition:border-color .3s}
@@ -52,34 +58,40 @@ a{color:inherit;text-decoration:none}
 .nav .dl:hover{transform:translateY(-1px); box-shadow:0 8px 22px rgba(0,0,0,.18)}
 
 /* hero — video first */
-.hero{flex:1; display:flex; flex-direction:column; align-items:center; text-align:center; padding:38px 0 64px}
-.kick{font-family:var(--mono); font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); display:inline-flex; align-items:center; gap:9px; margin-bottom:24px}
+.hero{flex:1; display:flex; flex-direction:column; align-items:center; text-align:center; padding:24px 0 56px}
+.kick{font-family:var(--mono); font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); display:inline-flex; align-items:center; gap:9px; margin-bottom:18px}
 .kick .dot{width:7px;height:7px;border-radius:50%;background:var(--mint);box-shadow:0 0 0 0 rgba(19,160,102,.4);animation:pulse 2.6s infinite}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(19,160,102,.4)}70%{box-shadow:0 0 0 8px rgba(19,160,102,0)}100%{box-shadow:0 0 0 0 rgba(19,160,102,0)}}
-h1{font-family:var(--display); font-weight:800; font-size:clamp(26px,4.8vw,46px); line-height:1.04; letter-spacing:-.02em; text-transform:uppercase; max-width:16ch; overflow-wrap:break-word}
+h1{font-family:var(--display); font-weight:800; font-size:clamp(26px,4.6vw,44px); line-height:1.04; letter-spacing:-.02em; text-transform:uppercase; max-width:18ch; overflow-wrap:break-word}
 h1 .ar{color:var(--mint); font-family:var(--mono); font-weight:700}
+h1 .lead{white-space:nowrap}   /* keep the → with 'straight' so the arrow never ends a line */
 .sub{margin-top:18px; font-size:17.5px; color:var(--muted); max-width:46ch; line-height:1.5}
 .sub b{color:var(--ink); font-weight:600}
 
 /* the video — the hero element */
-.scope{position:relative; width:100%; margin-top:34px; border:1px solid var(--line2); border-radius:16px; overflow:hidden;
+.scope{position:relative; width:100%; margin-top:26px; border:1px solid var(--line2); border-radius:16px; overflow:hidden;
   background:#0c0d10; box-shadow:0 40px 90px -40px rgba(0,0,0,.45)}
 .scope video{display:block; width:100%; aspect-ratio:16/9; object-fit:cover}
 .scope .tk{position:absolute; width:15px; height:15px; border:1.5px solid rgba(255,255,255,.7); opacity:.9; z-index:2}
 .tk.tl{top:9px;left:9px;border-right:0;border-bottom:0}.tk.tr{top:9px;right:9px;border-left:0;border-bottom:0}
 .tk.bl{bottom:9px;left:9px;border-right:0;border-top:0}.tk.br{bottom:9px;right:9px;border-left:0;border-top:0}
-.scope .lbl{position:absolute; top:0; left:0; z-index:3; font-family:var(--mono); font-size:10.5px; color:#cfece0;
-  background:rgba(8,9,11,.6); padding:5px 11px; border-bottom-right-radius:9px; letter-spacing:.05em}
+.scope .lbl{position:absolute; top:9px; left:28px; z-index:3; font-family:var(--mono); font-size:10.5px; color:#cfece0;
+  background:rgba(8,9,11,.6); padding:4px 9px; border-radius:6px; letter-spacing:.05em}
 
 /* CTA */
-.cta{margin-top:34px; display:flex; flex-direction:column; align-items:center; gap:14px}
+.cta{margin-top:26px; display:flex; flex-direction:column; align-items:center; gap:14px}
 .btn{display:inline-flex; align-items:center; gap:11px; font-size:16px; font-weight:600; padding:15px 30px; border-radius:12px;
   background:var(--ink); color:var(--surface); transition:transform .15s var(--ease), box-shadow .25s}
 .btn svg{width:17px;height:17px}
 .btn:hover{transform:translateY(-2px); box-shadow:0 16px 40px rgba(0,0,0,.22)}
-.meta{font-family:var(--mono); font-size:12.5px; color:var(--faint); line-height:1.8}
-.meta b{color:var(--muted); font-weight:400}
+.meta{font-family:var(--mono); font-size:12.5px; color:var(--muted); display:flex; flex-direction:column; align-items:center; gap:7px}
+.meta .keys{display:inline-flex; align-items:center; gap:6px; color:var(--faint)}
+.meta .price b{color:var(--ink); font-weight:600}
 kbd{font-family:var(--mono); font-size:12px; background:var(--surface); border:1px solid var(--line2); border-bottom-width:2px; border-radius:5px; padding:2px 6px; color:var(--ink)}
+
+/* visible keyboard focus on every interactive element (light outline on dark btns) */
+.brand:focus-visible,.dl:focus-visible,.btn:focus-visible,.foot a:focus-visible,.pill:focus-visible{outline:2px solid var(--ink); outline-offset:3px; border-radius:8px}
+.btn:focus-visible,.dl:focus-visible{outline-color:#fff; outline-offset:2px}
 
 /* target pills */
 .pills{margin-top:30px; display:flex; gap:10px; flex-wrap:wrap; justify-content:center}
@@ -102,15 +114,15 @@ footer{border-top:1px solid var(--line); padding:26px 0}
   <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><circle cx="12" cy="12" r="2.5"/>
 </symbol></svg>
 
-<div class="navbar"><div class="wrap nav">
-  <a class="brand" href="#"><span class="mk"><svg><use href="#cross"/></svg></span> SNIPPAI</a>
+<header class="navbar"><nav class="wrap nav" aria-label="Primary">
+  <a class="brand" href="#" aria-label="SnippAI — home"><span class="mk"><svg><use href="#cross"/></svg></span> SNIPPAI</a>
   <!-- EDIT-DOWNLOAD --><a class="dl" href="#download">Download</a>
-</div></div>
+</nav></header>
 
 <main class="wrap hero">
   <span class="kick"><span class="dot"></span> Native macOS · for Claude Code</span>
   <!-- EDIT-TAGLINE -->
-  <h1>Screenshot <span class="ar">→</span> straight into Claude</h1>
+  <h1>Screenshot <span class="lead"><span class="ar">→</span> straight</span> into Claude</h1>
   <p class="sub">Grab a region of your screen and it lands <b>right in the Claude Code session you're already running</b> — terminal or desktop app. No alt-tab, no paste.</p>
 
   <div class="scope">
@@ -126,7 +138,11 @@ footer{border-top:1px solid var(--line); padding:26px 0}
     <!-- EDIT-DOWNLOAD --><a class="btn" href="#">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v11m0 0l4-4m-4 4l-4-4M5 21h14"/></svg> Download for macOS
     </a>
-    <div class="meta"><kbd>⌥</kbd> <kbd>⇧</kbd> <kbd>4</kbd> to capture &nbsp;·&nbsp; <b>7-day free trial, then one-time — no subscription</b></div>
+    <div class="meta">
+      <span class="keys"><kbd>⌥</kbd> <kbd>⇧</kbd> <kbd>4</kbd> to capture</span>
+      <!-- EDIT-PRICE (keep in sync with the footer) -->
+      <span class="price">7-day free trial, then <b>$29 once</b> — no subscription</span>
+    </div>
   </div>
 
   <div class="pills">
@@ -151,6 +167,12 @@ footer{border-top:1px solid var(--line); padding:26px 0}
   const n=document.querySelector('.navbar');
   const f=()=>n.classList.toggle('scrolled', scrollY>8);
   addEventListener('scroll', f, {passive:true}); f();
+
+  // Honor reduced-motion: pause the looping demo and show its poster instead.
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const v=document.querySelector('.scope video');
+    if (v){ v.removeAttribute('autoplay'); v.loop=false; v.pause(); }
+  }
 </script>
 </body>
 </html>
