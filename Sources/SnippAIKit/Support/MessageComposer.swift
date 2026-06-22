@@ -8,8 +8,10 @@ import Foundation
 /// Pure, so it's unit-testable. The single-screenshot wording is preserved exactly
 /// for backward compatibility; multiple paths are comma-joined.
 public func composeMessage(text: String, screenshots: [URL]) -> String {
+    // Preserve the user's internal newlines (the desktop adapter pastes via the
+    // clipboard, where multi-line is fine). Delivery channels that can't take raw
+    // newlines — a live terminal TUI submits on each \n — flatten at send time.
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        .replacingOccurrences(of: "\n", with: " ")
     guard !screenshots.isEmpty else { return trimmed }
     let paths = screenshots.map(\.path)
 

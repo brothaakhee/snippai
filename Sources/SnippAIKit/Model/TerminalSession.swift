@@ -14,11 +14,15 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
     public var lastLine: String    // last on-screen non-empty line, for disambiguation
     public var source: String      // which terminal app this session lives in (e.g. "iTerm2")
     public var tty: String         // controlling tty (e.g. /dev/ttys005) — picker hint + hook join key
+    public var transcriptPath: String  // exact Claude Code transcript .jsonl, when the adapter knows it
+    public var supportsInject: Bool    // false for mirror-only targets (none today; desktop now injects via UI automation)
+    public var hasScreenStream: Bool   // false when display comes from the transcript mirror, not a terminal screen (the Claude desktop app)
 
     public init(id: String, cwd: String = "", title: String = "", jobName: String = "",
                 windowID: String = "", tabID: String = "", windowNumber: Int = 0,
                 tabIndex: Int = 0, paneIndex: Int = 0, lastLine: String = "", source: String = "",
-                tty: String = "") {
+                tty: String = "", transcriptPath: String = "", supportsInject: Bool = true,
+                hasScreenStream: Bool = true) {
         self.id = id
         self.cwd = cwd
         self.title = title
@@ -31,6 +35,9 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
         self.lastLine = lastLine
         self.source = source
         self.tty = tty
+        self.transcriptPath = transcriptPath
+        self.supportsInject = supportsInject
+        self.hasScreenStream = hasScreenStream
     }
 
     /// The folder name of the working directory — the primary human label.
@@ -49,6 +56,15 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
     public var looksLikeAgent: Bool {
         let job = jobName.lowercased()
         return ["claude", "codex", "aider", "cursor", "goose", "ollama"].contains { job.contains($0) }
+    }
+
+    /// Window/tab/pane position for a hover tooltip. Empty when there's no meaningful
+    /// terminal position (e.g. the Claude desktop app, which has no window/tab).
+    public var locationLabel: String {
+        guard hasScreenStream else { return "" }
+        var parts = ["Window \(windowNumber) · Tab \(tabIndex + 1)"]
+        if paneIndex > 0 { parts.append("Pane \(paneIndex + 1)") }
+        return parts.joined(separator: " · ")
     }
 
     /// Disambiguating sublabel given multiple sessions can share a cwd.

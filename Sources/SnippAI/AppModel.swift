@@ -50,14 +50,31 @@ final class AppModel {
     /// cycling) repaints its mirror instantly instead of flashing the placeholder.
     private var screenCache: [String: TerminalScreen] = [:]
 
+    /// The native-chat mirror's conversation, built by tailing the selected session's
+    /// transcript JSONL. This is the UI-agnostic mirror — it renders the same whether
+    /// the session runs in a terminal or the Claude desktop app (both write the same
+    /// host `~/.claude/projects/.../<uuid>.jsonl`).
+    let conversation = ConversationStore()
+    @ObservationIgnored private lazy var transcriptMirror = TranscriptMirrorController(store: conversation)
+    /// Exact transcript path per session id, learned from hook frames — overrides the
+    /// cwd-based cold-start guess once a hook pins the pane's actual transcript.
+    private var sessionTranscriptPaths: [String: String] = [:]
+
     let adapter: any TargetAdapter
     private var streamTask: Task<Void, Never>?
     private var streamGeneration = 0
     private static let lastSessionKey = "lastUsedSessionID"
     private var lastUsedSessionID: String?
 
-    init(adapter: any TargetAdapter = AdapterRouter(adapters: [ITermAdapter(), TerminalAppAdapter()])) {
-        self.adapter = adapter
+    init(adapter: (any TargetAdapter)? = nil) {
+        // Desktop inject is UI automation (AppKit/CGEvent), which SnippAIKit can't do —
+        // hand the adapter an app-layer injector closure so the desktop app becomes a
+        // first-class send target, not mirror-only.
+        self.adapter = adapter ?? AdapterRouter(adapters: [
+            ITermAdapter(),
+            TerminalAppAdapter(),
+            ClaudeDesktopAdapter(inject: DesktopInjector.make()),
+        ])
         lastUsedSessionID = UserDefaults.standard.string(forKey: Self.lastSessionKey)
     }
 
@@ -138,7 +155,11 @@ final class AppModel {
             // last-used session, then an agent session, then the first result.
             // Also drops a stale selection (closed, or filtered out).
             if !filteredSessions.contains(where: { $0.id == selectedSessionID }) {
+                // Prefer an INJECTABLE target so a mirror-only desktop session never
+                // becomes the silent default (which would disable send with no picker).
                 selectedSessionID = filteredSessions.first(where: { $0.id == lastUsedSessionID })?.id
+                    ?? filteredSessions.first(where: { $0.looksLikeAgent && $0.supportsInject })?.id
+                    ?? filteredSessions.first(where: { $0.supportsInject })?.id
                     ?? filteredSessions.first(where: { $0.looksLikeAgent })?.id
                     ?? filteredSessions.first?.id
             }
@@ -166,16 +187,58 @@ final class AppModel {
 
     func choose(sessionID: String) {
         selectedSessionID = sessionID
-        lastUsedSessionID = sessionID
-        UserDefaults.standard.set(sessionID, forKey: Self.lastSessionKey)
+        // Don't persist a mirror-only target as the launch default — it would be
+        // auto-restored next launch and strand the user on a can't-send panel.
+        if sessions.first(where: { $0.id == sessionID })?.supportsInject != false {
+            lastUsedSessionID = sessionID
+            UserDefaults.standard.set(sessionID, forKey: Self.lastSessionKey)
+        }
         justSent = false
         statusMessage = nil
         startComposing(sessionID: sessionID)
     }
 
+    /// Resolves and mirrors the session's transcript as a native chat. Prefers the
+    /// exact path a hook pinned for this pane; otherwise cold-starts from the newest
+    /// transcript in the session's working directory.
+    private func bindTranscriptMirror(forSession sessionID: String) {
+        let session = sessions.first { $0.id == sessionID }
+        // 1) Exact path the adapter already knows (e.g. the desktop registry).
+        if let exact = session?.transcriptPath, !exact.isEmpty {
+            transcriptMirror.bind(toPath: exact)
+            return
+        }
+        // 2) Exact path a hook pinned for this pane.
+        if let exact = sessionTranscriptPaths[sessionID] {
+            transcriptMirror.bind(toPath: exact)
+            return
+        }
+        // 3) Cold-start: newest transcript in the session's working directory —
+        // excluding any co-resident desktop session's transcript (which is always the
+        // newest while active), so a terminal target never mirrors the desktop's chat.
+        let desktopPaths = Set(sessions.filter { !$0.hasScreenStream }
+            .map(\.transcriptPath).filter { !$0.isEmpty })
+        if let cwd = session?.cwd, !cwd.isEmpty,
+           let url = TranscriptLocator.newestTranscript(forCWD: cwd, excluding: desktopPaths) {
+            transcriptMirror.bind(toPath: url.path)
+        } else {
+            transcriptMirror.stop()
+            conversation.reset()
+        }
+    }
+
+    /// Debug (SNIPPAI_MIRROR_TRANSCRIPT): mirror a specific transcript file directly,
+    /// so the native chat can be inspected/screenshotted against a real conversation.
+    func debugMirrorTranscript(path: String) {
+        phase = .composing
+        transcriptMirror.bind(toPath: path)
+    }
+
     func backToPicker() {
         streamTask?.cancel()
         streamTask = nil
+        transcriptMirror.stop()
+        conversation.reset()
         streamGeneration += 1   // invalidate the cancelled stream's late writes
         pickerQuery = ""
         justSent = false
@@ -217,6 +280,17 @@ final class AppModel {
 
     private func startComposing(sessionID: String) {
         phase = .composing
+        // The faithful, cell-accurate terminal mirror is the display for sessions with
+        // a real screen (iTerm/Terminal) — it shows exactly what's on screen, ANSI and
+        // all. The transcript-driven native chat is ONLY for targets that have no
+        // terminal screen to mirror (the Claude desktop app); using it for terminals
+        // would replace the true render with a less-faithful reconstruction.
+        if sessions.first(where: { $0.id == sessionID })?.hasScreenStream == false {
+            bindTranscriptMirror(forSession: sessionID)
+        } else {
+            transcriptMirror.stop()
+            conversation.reset()
+        }
         // Show this session's last-known frame instantly (keyed by session, so it's
         // never another session's content) — only fall back to the "Connecting…"
         // placeholder for a target we haven't mirrored yet. Keeps cycling smooth.
@@ -224,6 +298,15 @@ final class AppModel {
         connectionError = nil
         streamTask?.cancel()
         streamGeneration += 1
+        // Start the terminal screen stream only for a target that actually has one.
+        // The Claude desktop app has no terminal screen — the transcript-driven
+        // conversation mirror is its display — and an unknown/not-yet-discovered id
+        // defaults to skip, so the stream's "ended → connection lost" path can't fire
+        // a false error against a session with no terminal.
+        if sessions.first(where: { $0.id == sessionID })?.hasScreenStream != true {
+            streamTask = nil
+            return
+        }
         let generation = streamGeneration
         let adapter = self.adapter
         // This Task inherits MainActor isolation, so it can touch model state
@@ -272,6 +355,9 @@ final class AppModel {
     /// Composes the outgoing message (user text + screenshot paths) and submits it.
     func send() async {
         guard let sessionID = selectedSessionID else { return }
+        // Defense-in-depth: the UI disables send for mirror-only targets; never try to
+        // inject into one (the adapter would just throw).
+        guard selectedSession?.supportsInject != false else { return }
         let composed = composeMessage(text: messageText, screenshots: screenshotURLs)
         guard !composed.isEmpty else { return }
         isSending = true
@@ -298,6 +384,7 @@ final class AppModel {
     func teardown() {
         streamTask?.cancel()
         streamTask = nil
+        transcriptMirror.stop()
     }
 
     // MARK: - Hook-derived agent state (enrichment over the mirror)
@@ -356,8 +443,17 @@ final class AppModel {
     /// session (anti-spoof) or carry an unrecognized event (schema drift).
     func applyHookFrame(_ frame: HookFrame) {
         guard let id = HookCorrelator.sessionID(
-            for: frame, knownIDs: knownSessionIDs, ttyToID: ttyToSessionID),
-              let state = AgentState.from(event: frame.event) else { return }
+            for: frame, knownIDs: knownSessionIDs, ttyToID: ttyToSessionID) else { return }
+        // Learn this pane's exact transcript path (per-pane ground truth) even when the
+        // event itself isn't a state transition — it upgrades the mirror's cold-start
+        // guess and rebinds the live mirror if this is the session being viewed.
+        if let path = frame.claudePayload?.transcriptPath, !path.isEmpty {
+            sessionTranscriptPaths[id] = path
+            if id == selectedSessionID, phase == .composing {
+                transcriptMirror.bind(toPath: path)
+            }
+        }
+        guard let state = AgentState.from(event: frame.event) else { return }
         agentStates[id] = AgentStateEntry(
             state: state, lastEventAt: Date(), message: frame.claudePayload?.message)
         notifyAttention()

@@ -87,9 +87,9 @@ private struct TitleBar: View {
     private var attachments: some View {
         if model.screenshotURLs.isEmpty {
             Image(systemName: "camera.viewfinder")
-                .scaledFont(20)
+                .scaledFont(30)
                 .foregroundStyle(.secondary)
-                .frame(width: 60, height: 42)
+                .frame(width: 116, height: 82)
         } else {
             HStack(spacing: 6) {
                 ForEach(model.screenshotURLs, id: \.self) { url in
@@ -118,14 +118,14 @@ private struct ThumbnailChip: View {
                     Color.primary.opacity(0.08)
                 }
             }
-            .frame(width: 56, height: 40)
-            .clipShape(RoundedRectangle(cornerRadius: 7))
-            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.white.opacity(0.15)))
+            .frame(width: 112, height: 80)
+            .clipShape(RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(.white.opacity(0.15)))
 
             if hovering {
                 Button(action: onRemove) {
                     Image(systemName: "xmark.circle.fill")
-                        .scaledFont(13)
+                        .scaledFont(16)
                         .symbolRenderingMode(.palette)
                         .foregroundStyle(.white, .black.opacity(0.6))
                 }
@@ -151,18 +151,39 @@ private struct AddScreenshotButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "plus")
-                .scaledFont(14, weight: .medium)
+                .scaledFont(18, weight: .medium)
                 .foregroundStyle(.secondary)
-                .frame(width: 30, height: 40)
+                .frame(width: 44, height: 80)
                 .background(
-                    RoundedRectangle(cornerRadius: 7)
+                    RoundedRectangle(cornerRadius: 9)
                         .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3]))
                         .foregroundStyle(.secondary.opacity(0.5)))
-                .contentShape(RoundedRectangle(cornerRadius: 7))
+                .contentShape(RoundedRectangle(cornerRadius: 9))
         }
         .buttonStyle(.plain)
         .help("Add another screenshot (⌥⇧4)")
         .accessibilityLabel("Add another screenshot")
+    }
+}
+
+/// The app a session lives in, as a small colored capsule. Terminals share one
+/// color; the Claude desktop app gets its own so it stands apart in the picker/header.
+private struct SourceBadge: View {
+    let source: String
+
+    private var color: Color {
+        source == "Claude Desktop"
+            ? Color(red: 0.78, green: 0.66, blue: 1.0)   // violet — the desktop app
+            : Color(red: 0.49, green: 0.76, blue: 1.0)   // blue — iTerm2 / Terminal.app
+    }
+
+    var body: some View {
+        Text(source)
+            .scaledFont(10, weight: .semibold)
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(color.opacity(0.16), in: Capsule())
+            .foregroundStyle(color)
+            .fixedSize()
     }
 }
 
@@ -180,7 +201,10 @@ private struct ComposeView: View {
             targetBar
             // The mirror is an inset, rounded "screen" rather than a full-bleed
             // opaque slab butting against the material — no bracketing dividers.
-            TerminalMirrorView(screen: model.screen, scrollKey: model.mirrorScrollKey)
+            // Prefer the native-chat transcript mirror (works for terminal AND the
+            // desktop app); fall back to the faithful TUI mirror for sessions with no
+            // resolvable transcript (e.g. a non-Claude terminal).
+            mirror
                 .clipShape(RoundedRectangle(cornerRadius: PanelStyle.controlRadius))
                 .overlay(RoundedRectangle(cornerRadius: PanelStyle.controlRadius)
                     .strokeBorder(.white.opacity(0.06), lineWidth: 1))
@@ -192,6 +216,18 @@ private struct ComposeView: View {
         .onExitCommand { model.backToPicker() }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) { Divider().opacity(0.4); inputBar }
+        }
+    }
+
+    @ViewBuilder private var mirror: some View {
+        // Terminal sessions have a true, cell-accurate screen — always show that
+        // faithful TUI mirror. The transcript-driven native chat is only for targets
+        // with no terminal screen (the Claude desktop app), or the debug viewer
+        // (no selected session). `hasScreenStream != true` covers both.
+        if model.conversation.hasVisibleContent, model.selectedSession?.hasScreenStream != true {
+            ConversationMirrorView(store: model.conversation, scrollKey: model.mirrorScrollKey)
+        } else {
+            TerminalMirrorView(screen: model.screen, scrollKey: model.mirrorScrollKey)
         }
     }
 
@@ -220,39 +256,43 @@ private struct ComposeView: View {
     }
 
     private func targetIdentity(session: TerminalSession?, state: AgentState) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 7) {
             Image(systemName: session?.looksLikeAgent == true ? "sparkles" : "terminal")
                 .foregroundStyle(session?.looksLikeAgent == true ? PanelStyle.accent : .secondary)
                 .scaledFont(12)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(session?.folderName ?? "session")
-                    .scaledFont(12, weight: .semibold)
-                    .lineLimit(1)
-                Text(session?.disambiguator ?? "")
-                    .scaledFont(10).foregroundStyle(.secondary)
-                    .lineLimit(1)
+            Text(session?.folderName ?? "session")
+                .scaledFont(13, weight: .semibold)
+                .lineLimit(1)
+            // Which app the session lives in, as a colored badge (distinct from the
+            // mint shortcut pill). Window/tab moves to a hover tooltip; the running
+            // job (e.g. sourcekit-lsp) is dropped — it's incidental, not useful.
+            if let src = session?.source, !src.isEmpty {
+                SourceBadge(source: src)
             }
-            // A live-mirror indicator so the terminal's liveness is legible.
-            LiveDot()
-            // Hook-derived semantic state (Done / Needs you), when known.
+            // Hook-derived semantic state (Done / Needs you), when known. (No generic
+            // "live" pulse — a blinking green dot reads as "the agent is working" even
+            // when the session is idle; the mirror updating is itself the liveness cue.)
             AgentStateBadge(state: state)
         }
+        .help(session?.locationLabel ?? "")
     }
 
     @ViewBuilder
     private var switchControls: some View {
         HStack(spacing: 8) {
             if let pos = model.targetPosition, pos.total > 1 {
-                Text("\(pos.index)/\(pos.total)")
-                    .scaledFont(10, weight: .medium).monospacedDigit()
-                    .foregroundStyle(.tertiary)
-                    .contentTransition(.numericText())
-                    .accessibilityHidden(true)
-                Text("⌘ ←→")
-                    .scaledFont(10, design: .rounded)
-                    .foregroundStyle(.tertiary)
-                    .help("Switch target: ⌘← or ⌘↑ previous · ⌘→ or ⌘↓ next")
-                    .accessibilityHidden(true)
+                HStack(spacing: 6) {
+                    Text("\(pos.index)/\(pos.total)")
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                    Text("⌘ ←→")
+                }
+                .scaledFont(12, weight: .medium, design: .rounded)
+                .foregroundStyle(PanelStyle.accent)
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .background(PanelStyle.accent.opacity(0.14), in: Capsule())
+                .help("Switch target: ⌘← or ⌘↑ previous · ⌘→ or ⌘↓ next")
+                .accessibilityHidden(true)
             }
             Button("Change") { model.backToPicker() }
                 .scaledFont(11)
@@ -336,6 +376,10 @@ private struct ComposeView: View {
                     .background(canSend ? PanelStyle.accent : Color.primary.opacity(0.12), in: Circle())
                     .foregroundStyle(canSend ? .white : .secondary)
                     .shadow(color: PanelStyle.accent.opacity(canSend ? 0.3 : 0), radius: 4, y: 1)
+                    // Match the input box's single-line height so the circle centers
+                    // with the text; with the HStack's .bottom alignment it stays
+                    // pinned near the bottom as the box grows multi-line.
+                    .frame(height: inputMinHeight + 8)
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: canSend)
                 }
                 .buttonStyle(.plain)
@@ -353,7 +397,11 @@ private struct ComposeView: View {
 
     @ViewBuilder
     private var footer: some View {
-        if model.justSent {
+        if model.selectedSession?.supportsInject == false {
+            Label("Mirror only — type in the Claude app to reply", systemImage: "eye")
+                .scaledFont(10).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else if model.justSent {
             Label(model.statusMessage ?? "Sent — watch Claude work above", systemImage: "checkmark.circle.fill")
                 .font(.caption).foregroundStyle(.green)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -368,27 +416,13 @@ private struct ComposeView: View {
     }
 
     private var canSend: Bool {
-        !model.isSending && (!model.messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !model.screenshotURLs.isEmpty)
+        !model.isSending
+            && model.selectedSession?.supportsInject != false   // mirror-only targets can't receive input
+            && (!model.messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !model.screenshotURLs.isEmpty)
     }
 
     private func send() {
         guard canSend else { return }
         Task { await model.send() }
-    }
-}
-
-/// A small green "live" dot that gently pulses, signaling the mirror is live.
-private struct LiveDot: View {
-    @State private var on = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        Circle()
-            .fill(.green)
-            .frame(width: 6, height: 6)
-            .opacity(reduceMotion ? 1 : (on ? 1 : 0.35))
-            .animation(reduceMotion ? nil : .easeInOut(duration: 1).repeatForever(autoreverses: true), value: on)
-            .onAppear { on = true }
-            .accessibilityHidden(true)
     }
 }

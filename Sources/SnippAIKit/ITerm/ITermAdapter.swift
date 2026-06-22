@@ -77,7 +77,11 @@ public actor ITermAdapter: TargetAdapter {
         // literal newline (so the message would paste but never send). Send the
         // Return as a separate write so it lands as a distinct keypress, not part
         // of the same input burst (which some TUIs treat as a paste).
-        try await client.sendText(sessionID: sessionID, text: text)
+        // Flatten internal newlines: a raw \n in a live TUI is interpreted as Enter
+        // and would submit the message early, fragmenting it. (Multi-line is preserved
+        // on the desktop-app path, which pastes via the clipboard.)
+        let oneLine = text.replacingOccurrences(of: "\n", with: " ")
+        try await client.sendText(sessionID: sessionID, text: oneLine)
         try await Task.sleep(nanoseconds: 60_000_000)
         try await client.sendText(sessionID: sessionID, text: "\r")
     }

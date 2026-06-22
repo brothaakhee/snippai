@@ -95,6 +95,25 @@ enum PermissionsService {
         open("x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")
     }
 
+    // MARK: - Accessibility (for desktop-app inject via synthetic keystrokes)
+
+    /// Whether SnippAI may post synthetic keystrokes (CGEvent) — required to inject
+    /// into the Claude desktop app. Non-prompting.
+    static func isAccessibilityTrusted() -> Bool { AXIsProcessTrusted() }
+
+    /// Surfaces the system Accessibility prompt (adds SnippAI to the list). The grant
+    /// takes effect immediately once toggled on — no relaunch needed for CGEvent.
+    @discardableResult
+    static func requestAccessibility() -> Bool {
+        // The literal key avoids the non-Sendable global `kAXTrustedCheckOptionPrompt`.
+        let opts = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+        return AXIsProcessTrustedWithOptions(opts)
+    }
+
+    static func openAccessibilitySettings() {
+        open("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+    }
+
     static func launchITerm() {
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: iTermBundleID) else { return }
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())

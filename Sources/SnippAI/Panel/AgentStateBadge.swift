@@ -26,9 +26,19 @@ struct AgentStateBadge: View {
     var body: some View {
         if state.isVisible {
             HStack(spacing: 4) {
-                Image(systemName: state.symbolName)
-                    .font(.system(size: glyph, weight: .semibold))
-                    .symbolRenderingMode(.hierarchical)
+                // "Working" uses the native indeterminate spinner — unmistakably
+                // animated. (A rotating SF Symbol like circle.dotted reads as static
+                // because it's rotationally symmetric.) Other states are static glyphs.
+                if state == .working {
+                    ProgressView()
+                        .controlSize(.small)
+                        .scaleEffect(glyph / 16)   // shrink the ~16pt spinner to glyph size
+                        .frame(width: glyph, height: glyph)
+                } else {
+                    Image(systemName: state.symbolName)
+                        .font(.system(size: glyph, weight: .semibold))
+                        .symbolRenderingMode(.hierarchical)
+                }
                 if showsLabel {
                     Text(state.label)
                         .scaledFont(10, weight: .semibold)
