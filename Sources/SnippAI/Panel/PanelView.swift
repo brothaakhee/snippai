@@ -247,9 +247,9 @@ private struct ComposeView: View {
                     .scaledFont(10).foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            // A live-mirror indicator so the terminal's liveness is legible.
-            LiveDot()
-            // Hook-derived semantic state (Done / Needs you), when known.
+            // Hook-derived semantic state (Done / Needs you), when known. (No generic
+            // "live" pulse — a blinking green dot reads as "the agent is working" even
+            // when the session is idle; the mirror updating is itself the liveness cue.)
             AgentStateBadge(state: state)
         }
     }
@@ -353,6 +353,10 @@ private struct ComposeView: View {
                     .background(canSend ? PanelStyle.accent : Color.primary.opacity(0.12), in: Circle())
                     .foregroundStyle(canSend ? .white : .secondary)
                     .shadow(color: PanelStyle.accent.opacity(canSend ? 0.3 : 0), radius: 4, y: 1)
+                    // Match the input box's single-line height so the circle centers
+                    // with the text; with the HStack's .bottom alignment it stays
+                    // pinned near the bottom as the box grows multi-line.
+                    .frame(height: inputMinHeight + 8)
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: canSend)
                 }
                 .buttonStyle(.plain)
@@ -397,21 +401,5 @@ private struct ComposeView: View {
     private func send() {
         guard canSend else { return }
         Task { await model.send() }
-    }
-}
-
-/// A small green "live" dot that gently pulses, signaling the mirror is live.
-private struct LiveDot: View {
-    @State private var on = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        Circle()
-            .fill(.green)
-            .frame(width: 6, height: 6)
-            .opacity(reduceMotion ? 1 : (on ? 1 : 0.35))
-            .animation(reduceMotion ? nil : .easeInOut(duration: 1).repeatForever(autoreverses: true), value: on)
-            .onAppear { on = true }
-            .accessibilityHidden(true)
     }
 }
