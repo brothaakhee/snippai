@@ -85,13 +85,16 @@ public actor TerminalAppAdapter: TargetAdapter {
     // MARK: - Send / snapshot / stream / focus
 
     public func send(text: String, toSession sessionID: String) async throws {
+        // Flatten newlines: `do script` runs each line as a separate command, which
+        // would submit a multi-line message prematurely / fragment it.
+        let oneLine = text.replacingOccurrences(of: "\n", with: " ")
         let script = """
         tell application "Terminal"
           repeat with w in windows
             repeat with t in tabs of w
               try
                 if (tty of t) is \(AppleScript.quote(sessionID)) then
-                  do script \(AppleScript.quote(text)) in t
+                  do script \(AppleScript.quote(oneLine)) in t
                   return "ok"
                 end if
               end try

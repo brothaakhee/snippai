@@ -9,8 +9,10 @@ final class MessageComposerTests: XCTestCase {
         XCTAssertEqual(composeMessage(text: "fix this", screenshots: []), "fix this")
     }
 
-    func testTextIsTrimmedAndNewlinesFlattened() {
-        XCTAssertEqual(composeMessage(text: "  line1\nline2  ", screenshots: []), "line1 line2")
+    func testOuterWhitespaceTrimmedButInternalNewlinesPreserved() {
+        // Internal newlines are kept (desktop pastes multi-line via clipboard); only
+        // leading/trailing whitespace is trimmed. Terminal adapters flatten at send.
+        XCTAssertEqual(composeMessage(text: "  line1\nline2  ", screenshots: []), "line1\nline2")
     }
 
     func testSingleScreenshotWithText_preservesLegacyWording() {
@@ -33,8 +35,8 @@ final class MessageComposerTests: XCTestCase {
         XCTAssertEqual(out, "Look at these screenshots: /tmp/a.png, /tmp/b.png, /tmp/c.png")
     }
 
-    func testOutputIsSingleLine() {
+    func testInternalNewlinesPreservedWithScreenshots() {
         let out = composeMessage(text: "a\nb", screenshots: [url("/tmp/a.png"), url("/tmp/b.png")])
-        XCTAssertFalse(out.contains("\n"), "composed message must stay on one line")
+        XCTAssertEqual(out, "a\nb  (screenshots: /tmp/a.png, /tmp/b.png)")
     }
 }

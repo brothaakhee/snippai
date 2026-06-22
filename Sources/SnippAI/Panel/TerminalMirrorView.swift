@@ -28,7 +28,7 @@ struct TerminalMirrorView: NSViewRepresentable {
         textView.isSelectable = true
         textView.drawsBackground = true
         textView.backgroundColor = TerminalPalette.defaultBackgroundNS
-        textView.textContainerInset = NSSize(width: 12, height: 8)
+        textView.textContainerInset = NSSize(width: 6, height: 8)
         // Terminal lines must NOT wrap (wrapping breaks the monospaced grid) — let
         // long lines extend and clip on the right.
         textView.isVerticallyResizable = true
