@@ -8,10 +8,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let captureController = CaptureController()
     private let onboarding = OnboardingController()
     private let shortcutStore = ShortcutStore()
+    private let licenseStore = LicenseStore()
+    private let updateController = UpdateController()
+    private lazy var paywallController = PaywallController()
     private lazy var hookController = HookController(model: model)
-    private lazy var settings = SettingsController(store: shortcutStore, hooks: hookController)
+    private lazy var settings = SettingsController(store: shortcutStore, hooks: hookController, license: licenseStore)
     private var statusItem: NSStatusItem?
     private var captureMenuItem: NSMenuItem?
+    private var updateMenuItem: NSMenuItem?
     private var hotKey: HotKey?
     private var isCapturing = false
 
@@ -50,6 +54,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // bring the hook listener back if the user enabled it previously.
         model.onAttentionChange = { [weak self] needs in self?.updateAttentionDot(needs) }
         hookController.startIfEnabled()
+
+        // Re-check the stored license against Lemon Squeezy on launch (silent when
+        // offline — the cached verdict + grace window keep licensed users working).
+        Task { await licenseStore.revalidateInBackground() }
+
+        // Lightweight update check: show a menu item if a newer build is published.
+        updateController.onChange = { [weak self] in self?.refreshUpdateMenuItem() }
+        updateController.checkInBackground()
 
         // Debug: self-test the ScreenCaptureKit path on an explicit global rect.
         if let spec = ProcessInfo.processInfo.environment["SNIPPAI_TEST_CAPTURE"] {
@@ -170,11 +182,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupItem.target = self
         menu.addItem(setupItem)
         menu.addItem(.separator())
+        // Appears only when the update check finds a newer build (hidden otherwise).
+        let updateItem = NSMenuItem(title: "Update SnippAI…", action: #selector(menuUpdate), keyEquivalent: "")
+        updateItem.target = self
+        updateItem.isHidden = true
+        menu.addItem(updateItem)
+        self.updateMenuItem = updateItem
         let quitItem = NSMenuItem(title: "Quit SnippAI", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quitItem)
         item.menu = menu
         self.statusItem = item
+        refreshUpdateMenuItem()
     }
+
+    /// Shows/hides the "Update SnippAI" menu item based on the latest check.
+    private func refreshUpdateMenuItem() {
+        guard let item = updateMenuItem else { return }
+        if let update = updateController.available {
+            item.title = "Update to SnippAI \(update.version)…"
+            item.isHidden = false
+        } else {
+            item.isHidden = true
+        }
+    }
+
+    @objc private func menuUpdate() { updateController.openDownload() }
 
     private var captureMenuTitle: String { "Capture & Send  (\(shortcutStore.combo.displayString))" }
 
@@ -204,6 +236,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Capture flow
 
     private func beginCapture() {
+        guard !isCapturing else { return }
+        // Trial/paywall gate — the single choke point for every capture entry (hotkey,
+        // menu, panel "+"). Once the trial is over, capturing prompts the paywall; the
+        // user may "Maybe later" past it a limited number of times, then a license is
+        // required. In-trial and licensed users pass straight through.
+        switch licenseStore.evaluateCapture() {
+        case .allowed:
+            performCapture()
+        case .paywall(let canDefer):
+            paywallController.show(store: licenseStore, canDefer: canDefer) { [weak self] proceed in
+                if proceed { self?.performCapture() }
+            }
+        }
+    }
+
+    private func performCapture() {
         guard !isCapturing else { return }
         // If we'd be appending to an open draft that's already at the cap, don't make
         // the user drag out a region that gets discarded — give audible feedback.

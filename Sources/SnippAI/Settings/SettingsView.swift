@@ -1,14 +1,20 @@
 import SwiftUI
+import SnippAIKit
 
 /// SnippAI settings — currently the capture shortcut. Mirrors the onboarding
 /// window's material/typography so the two feel like one app.
 struct SettingsView: View {
     @Bindable var store: ShortcutStore
     @Bindable var hooks: HookController
+    @Bindable var license: LicenseStore
     var onDone: () -> Void
 
+    @Environment(\.openURL) private var openURL
     @State private var recorder = ShortcutRecorder()
     @State private var message: Message?
+    @State private var licenseKeyInput = ""
+    @State private var activating = false
+    @State private var licenseMessage: Message?
 
     private struct Message { var text: String; var isWarning: Bool }
 
@@ -26,6 +32,7 @@ struct SettingsView: View {
                         .transition(.opacity)
                 }
                 claudeStatusCard
+                licenseCard
             }
             .padding(20)
             Divider()
@@ -123,6 +130,77 @@ struct SettingsView: View {
         .padding(12)
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: PanelStyle.cardRadius))
         .animation(.easeInOut(duration: 0.15), value: hooks.isEnabled)
+    }
+
+    // MARK: License card
+
+    private var licenseCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: license.isLicensed ? "checkmark.seal.fill" : "sparkles")
+                    .scaledFont(15)
+                    .foregroundStyle(license.isLicensed ? Color.green : PanelStyle.accent)
+                    .frame(width: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(license.isLicensed ? "License" : "SnippAI").scaledFont(13, weight: .semibold)
+                    Text(license.statusSummary)
+                        .scaledFont(11).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                if license.isLicensed {
+                    Button("Deactivate") { Task { await license.deactivate() } }
+                        .controlSize(.small)
+                } else {
+                    Button("Buy — $8.99") { openURL(LicenseConfig.checkoutURL) }
+                        .controlSize(.small)
+                }
+            }
+            if !license.isLicensed {
+                HStack(spacing: 8) {
+                    TextField("Enter license key", text: $licenseKeyInput)
+                        .textFieldStyle(.roundedBorder)
+                        .scaledFont(11, design: .monospaced)
+                        .disabled(activating)
+                        .onSubmit(activateLicense)
+                    Button(action: activateLicense) {
+                        if activating { ProgressView().controlSize(.small).frame(width: 56) }
+                        else { Text("Activate").frame(minWidth: 56) }
+                    }
+                    .controlSize(.small)
+                    .disabled(activating || licenseKeyInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            if let licenseMessage {
+                Label(licenseMessage.text, systemImage: licenseMessage.isWarning ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                    .scaledFont(10)
+                    .foregroundStyle(licenseMessage.isWarning ? Color.orange : .green)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
+            }
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: PanelStyle.cardRadius))
+        .animation(.easeInOut(duration: 0.15), value: license.isLicensed)
+        .animation(.easeInOut(duration: 0.15), value: activating)
+    }
+
+    private func activateLicense() {
+        let trimmed = licenseKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !activating else { return }
+        activating = true
+        licenseMessage = nil
+        Task {
+            let result = await license.activate(key: trimmed)
+            activating = false
+            switch result {
+            case .success:
+                licenseMessage = Message(text: "License activated — thank you!", isWarning: false)
+                licenseKeyInput = ""
+            case .failure(let m):
+                licenseMessage = Message(text: m, isWarning: true)
+            }
+        }
     }
 
     private var recorderField: some View {
