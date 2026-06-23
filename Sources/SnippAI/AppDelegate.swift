@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        installMainMenu()
         CaptureController.sweepOldScreenshots()
         setupStatusItem()
         bindHotKey(to: shortcutStore.combo)
@@ -144,6 +145,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Installs a minimal main menu with a standard Edit menu. SnippAI is an accessory
+    /// app (no menu bar by default), so without this the system clipboard shortcuts
+    /// (⌘C/⌘V/⌘X/⌘A) never reach text fields — e.g. pasting a license key. The menu's
+    /// key equivalents are processed for the key window even while we're an accessory.
+    private func installMainMenu() {
+        let mainMenu = NSMenu()
+
+        let appItem = NSMenuItem()
+        mainMenu.addItem(appItem)
+        let appMenu = NSMenu()
+        appItem.submenu = appMenu
+        appMenu.addItem(withTitle: "Quit SnippAI",
+                        action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+
+        let editItem = NSMenuItem()
+        mainMenu.addItem(editItem)
+        let editMenu = NSMenu(title: "Edit")
+        editItem.submenu = editMenu
+        editMenu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+        NSApp.mainMenu = mainMenu
+    }
+
     // MARK: - Global hotkey
 
     /// (Re)registers the global capture hotkey, releasing any prior registration
@@ -227,9 +257,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func menuSetup() { onboarding.show() }
 
     @objc private func menuOpenPanel() {
-        Task {
-            await model.beginSession(screenshots: model.screenshotURLs)
-            panelController.show(onClose: {})
+        // Opening the panel is a way to use the app, so it goes through the same gate as
+        // capture — otherwise an expired user could bypass the paywall here.
+        withLicenseGate { [weak self] in
+            guard let self else { return }
+            Task {
+                await self.model.beginSession(screenshots: self.model.screenshotURLs)
+                self.panelController.show(onClose: {})
+            }
+        }
+    }
+
+    // MARK: - License gate
+
+    /// Runs `proceed` if the user is in trial or licensed; otherwise shows the paywall.
+    /// While grace deferrals remain, "Maybe later" lets the action through once. The
+    /// single gate for every way to use the app (capture hotkey/menu/panel "+", Open Panel).
+    private func withLicenseGate(_ proceed: @escaping () -> Void) {
+        switch licenseStore.evaluateCapture() {
+        case .allowed:
+            proceed()
+        case .paywall(let canDefer):
+            paywallController.show(store: licenseStore, canDefer: canDefer) { ok in
+                if ok { proceed() }
+            }
         }
     }
 
@@ -237,18 +288,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func beginCapture() {
         guard !isCapturing else { return }
-        // Trial/paywall gate — the single choke point for every capture entry (hotkey,
-        // menu, panel "+"). Once the trial is over, capturing prompts the paywall; the
-        // user may "Maybe later" past it a limited number of times, then a license is
-        // required. In-trial and licensed users pass straight through.
-        switch licenseStore.evaluateCapture() {
-        case .allowed:
-            performCapture()
-        case .paywall(let canDefer):
-            paywallController.show(store: licenseStore, canDefer: canDefer) { [weak self] proceed in
-                if proceed { self?.performCapture() }
-            }
-        }
+        withLicenseGate { [weak self] in self?.performCapture() }
     }
 
     private func performCapture() {

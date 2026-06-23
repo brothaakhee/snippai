@@ -35,9 +35,26 @@ final class PaywallController: NSObject, NSWindowDelegate {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true
+        // Dark window chrome so the traffic lights + title bar match the dark content.
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.backgroundColor = NSColor(srgbRed: 16/255, green: 18/255, blue: 22/255, alpha: 1)
         window.delegate = self
-        window.center()
         self.window = window
+
+        // Size to the content FIRST — otherwise the frame is still ~zero here and
+        // centering would place the top-left corner at screen center (off to the side).
+        hosting.view.layoutSubtreeIfNeeded()
+        window.setContentSize(hosting.view.fittingSize)
+
+        // Now center on the visible area with the real size.
+        if let screen = window.screen ?? NSScreen.main {
+            let vf = screen.visibleFrame
+            let size = window.frame.size
+            window.setFrameOrigin(NSPoint(x: vf.midX - size.width / 2,
+                                          y: vf.midY - size.height / 2))
+        } else {
+            window.center()
+        }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
