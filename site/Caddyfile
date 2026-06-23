@@ -1,0 +1,13 @@
+# Serves the static SnippAI site. Railway injects $PORT; fall back to 80 locally.
+:{$PORT:80} {
+	root * /srv
+	encode gzip zstd
+	file_server
+
+	# Long-cache the video + poster (immutable assets); revalidate the HTML.
+	@media path *.mp4 *.jpg *.png *.webp
+	header @media Cache-Control "public, max-age=604800, immutable"
+	header /index.html Cache-Control "public, max-age=0, must-revalidate"
+
+	header -Server
+}

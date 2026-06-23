@@ -7,11 +7,9 @@
 <meta name="description" content="A native macOS app that fires a screenshot + your message straight into the Claude Code session you're already running — in your terminal or the Claude desktop app." />
 
 <!-- ───────────────────────────────────────────────────────────────────────
-     PLACEHOLDERS to fill before launch (search "EDIT-"):
-       EDIT-DOWNLOAD → real download URL (GitHub Release .dmg/.zip)
-       EDIT-PRICE    → the one-time unlock price (currently $29)
-       EDIT-TAGLINE  → hero copy, if you want to tweak it
-     (demo.mp4 + demo-poster.jpg are real and already wired in.)
+     Download links → https://github.com/brothaakhee/snippai/releases/latest/download/SnippAI.dmg
+     (resolves once the first GitHub Release with a SnippAI.dmg asset is published).
+     Price $8.99 · demo.mp4 + demo-poster.jpg are real and wired in.
      ─────────────────────────────────────────────────────────────────────── -->
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -92,6 +90,7 @@ kbd{font-family:var(--mono); font-size:12px; background:var(--surface); border:1
 .btn:focus-visible,.dl:focus-visible{outline-color:#fff; outline-offset:2px}
 
 /* target pills — sit above the video as the 'works with' info */
+.capline{margin-top:16px; display:flex; justify-content:center; align-items:center; gap:6px; font-family:var(--mono); font-size:12.5px; color:var(--faint)}
 .pills{margin-top:16px; display:flex; gap:9px; flex-wrap:wrap; justify-content:center; align-items:center}
 .pills .pwith{font-family:var(--mono); font-size:12px; color:var(--faint); letter-spacing:.04em; margin-right:2px}
 .pill{font-family:var(--mono); font-size:12px; padding:6px 13px; border-radius:99px; border:1px solid var(--line2); background:var(--surface); color:var(--muted); display:inline-flex; align-items:center; gap:7px}
@@ -115,7 +114,7 @@ footer{border-top:1px solid var(--line); padding:26px 0}
 
 <header class="navbar"><nav class="wrap nav" aria-label="Primary">
   <a class="brand" href="#" aria-label="SnippAI — home"><span class="mk"><svg><use href="#cross"/></svg></span> SNIPPAI</a>
-  <!-- EDIT-DOWNLOAD --><a class="dl" href="#download">Download</a>
+  <a class="dl" href="https://github.com/brothaakhee/snippai/releases/latest/download/SnippAI.dmg">Download</a>
 </nav></header>
 
 <main class="wrap hero">
@@ -131,6 +130,8 @@ footer{border-top:1px solid var(--line); padding:26px 0}
     <span class="pill"><span class="d v"></span> Claude Desktop</span>
   </div>
 
+  <div class="capline"><kbd>⌥</kbd> <kbd>⇧</kbd> <kbd>4</kbd> <span>to capture</span></div>
+
   <div class="scope">
     <span class="tk tl"></span><span class="tk tr"></span><span class="tk bl"></span><span class="tk br"></span>
     <span class="lbl">REC · demo.mp4</span>
@@ -141,11 +142,10 @@ footer{border-top:1px solid var(--line); padding:26px 0}
   </div>
 
   <div class="cta" id="download">
-    <!-- EDIT-DOWNLOAD --><a class="btn" href="#">
+    <a class="btn" href="https://github.com/brothaakhee/snippai/releases/latest/download/SnippAI.dmg">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14"/></svg> Download for macOS
     </a>
     <div class="meta">
-      <span class="keys"><kbd>⌥</kbd> <kbd>⇧</kbd> <kbd>4</kbd> to capture</span>
       <!-- EDIT-PRICE (keep in sync with the footer) -->
       <span class="price">7-day free trial, then <b>$8.99 once</b> — no subscription</span>
     </div>
@@ -156,8 +156,8 @@ footer{border-top:1px solid var(--line); padding:26px 0}
   <div class="wrap foot">
     <!-- EDIT-PRICE --><div>$8.99 once · macOS 14+</div>
     <div class="links">
-      <a href="mailto:hello@snippai.app">Support</a>
-      <a href="#download">Download</a>
+      <a href="mailto:hello@snippai.dev">Support</a>
+      <a href="https://github.com/brothaakhee/snippai/releases/latest/download/SnippAI.dmg">Download</a>
     </div>
     <div>© 2026 SNIPPAI</div>
   </div>
