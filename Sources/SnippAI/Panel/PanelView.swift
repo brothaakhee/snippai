@@ -7,10 +7,34 @@ struct PanelView: View {
     @Bindable var model: AppModel
     var onClose: () -> Void
     var onAddScreenshot: () -> Void = {}
+    /// Called as the user drags the opacity slider, so the controller can fade the
+    /// NSPanel (alphaValue) live and persist the value.
+    var onOpacityChange: (Double) -> Void = { _ in }
+    /// Local mirror of the panel's opacity, seeded from the persisted value so the
+    /// slider + readout reflect the true current opacity. Writes flow out via
+    /// `onOpacityChange`; the controller is the source of truth for the live alpha.
+    @State private var opacity: Double
+
+    init(model: AppModel,
+         onClose: @escaping () -> Void,
+         onAddScreenshot: @escaping () -> Void = {},
+         initialOpacity: Double = 1.0,
+         onOpacityChange: @escaping (Double) -> Void = { _ in }) {
+        self._model = Bindable(wrappedValue: model)
+        self.onClose = onClose
+        self.onAddScreenshot = onAddScreenshot
+        self.onOpacityChange = onOpacityChange
+        self._opacity = State(initialValue: initialOpacity)
+    }
+
+    /// Slider binding that updates the live readout AND drives the panel's alpha.
+    private var opacityBinding: Binding<Double> {
+        Binding(get: { opacity }, set: { opacity = $0; onOpacityChange($0) })
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            TitleBar(model: model, onClose: onClose, onAddScreenshot: onAddScreenshot)
+            TitleBar(model: model, opacity: opacityBinding, onClose: onClose, onAddScreenshot: onAddScreenshot)
             Divider().opacity(0.5)
             switch model.phase {
             case .picking:
@@ -42,8 +66,13 @@ struct PanelView: View {
 
 private struct TitleBar: View {
     @Bindable var model: AppModel
+    @Binding var opacity: Double
     var onClose: () -> Void
     var onAddScreenshot: () -> Void = {}
+    @State private var showingOpacity = false
+    // Scale the circular chrome buttons with Dynamic Type so the glyph never crowds
+    // a fixed circle at large text sizes (matches ComposeView's send-button idiom).
+    @ScaledMetric(relativeTo: .body) private var buttonSize: CGFloat = 28
 
     /// Convey live, changing state rather than restating the visible thumbnail.
     private var subtitle: String {
@@ -65,11 +94,12 @@ private struct TitleBar: View {
             }
             .layoutPriority(-1)   // yield width to the thumbnails before truncating
             Spacer(minLength: 4)
+            opacityButton
             Button(action: onClose) {
                 Image(systemName: "xmark")
                     .scaledFont(11, weight: .bold)
                     .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
+                    .frame(width: buttonSize, height: buttonSize)
                     .background(Color.primary.opacity(0.08), in: Circle())
                     .contentShape(Circle())
             }
@@ -79,6 +109,60 @@ private struct TitleBar: View {
         }
         .padding(.horizontal, PanelStyle.contentInset)
         .padding(.vertical, PanelStyle.rowPadV)
+    }
+
+    private var opacityPercent: Int { Int((opacity * 100).rounded()) }
+    /// Whether the panel is faded below full opacity — drives the button's active
+    /// (mint) tint so the dimmed state reads at a glance.
+    private var isDimmed: Bool { opacity < 0.999 }
+
+    /// A compact control (styled like the close button so they read as a pair) that
+    /// reveals an opacity slider — lets the user fade the whole panel to see what's
+    /// behind it, without crowding the tight title row with an inline slider. It tints
+    /// mint while dimmed so the active state is obvious; the exact percentage lives in
+    /// the popover (visible live as you drag). The footprint is a FIXED circle that
+    /// never grows with the value — a value-dependent width would shift the popover's
+    /// anchor mid-drag, sliding the track under the cursor and causing a shake at the
+    /// dimmed threshold.
+    private var opacityButton: some View {
+        Button { showingOpacity.toggle() } label: {
+            Image(systemName: "circle.lefthalf.filled")
+                .scaledFont(12, weight: .bold)
+                .foregroundStyle(isDimmed ? PanelStyle.accent : Color.secondary)
+                .frame(width: buttonSize, height: buttonSize)
+                .background(isDimmed ? PanelStyle.accent.opacity(0.18) : Color.primary.opacity(0.08),
+                            in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help("Adjust panel opacity")
+        .accessibilityLabel("Panel opacity")
+        .accessibilityValue("\(opacityPercent) percent")
+        .popover(isPresented: $showingOpacity, arrowEdge: .bottom) { opacityPopover }
+    }
+
+    private var opacityPopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Panel opacity").scaledFont(12, weight: .semibold)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer()
+                Text("\(opacityPercent)%")
+                    .scaledFont(11).monospacedDigit().foregroundStyle(.secondary)
+                    .accessibilityHidden(true)   // the slider already announces the value
+            }
+            HStack(spacing: 8) {
+                Text("20%").scaledFont(10).foregroundStyle(.secondary).accessibilityHidden(true)
+                Slider(value: $opacity, in: 0.2...1.0)
+                    .accessibilityLabel("Opacity")
+                    .accessibilityValue("\(opacityPercent) percent")
+                Text("100%").scaledFont(10).foregroundStyle(.secondary).accessibilityHidden(true)
+            }
+        }
+        .padding(PanelStyle.contentInset)
+        .frame(width: 240)
+        .tint(PanelStyle.accent)
+        .environment(\.colorScheme, .dark)
     }
 
     /// The staged screenshots as a removable strip, with a trailing "+" to add more.

@@ -22,8 +22,12 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     private static let widthKey = "panelWidth"
     private static let heightKey = "panelHeight"
+    private static let opacityKey = "panelOpacity"
     private static let defaultSize = NSSize(width: 540, height: 600)
     private static let minSize = NSSize(width: 420, height: 420)
+    /// The panel never fades fully invisible — at the floor it's still visible and
+    /// grabbable. (alphaValue doesn't affect hit-testing, so it stays clickable too.)
+    private static let minOpacity = 0.2
 
     init(model: AppModel) {
         self.model = model
@@ -37,6 +41,31 @@ final class PanelController: NSObject, NSWindowDelegate {
         return NSSize(
             width: max(Self.minSize.width, CGFloat(d.double(forKey: Self.widthKey))),
             height: max(Self.minSize.height, CGFloat(d.double(forKey: Self.heightKey))))
+    }
+
+    /// The persisted panel opacity, clamped to `[minOpacity, 1]` (and fully opaque on
+    /// first run). Read with an `object(forKey:)` presence check — a bare
+    /// `double(forKey:)` returns 0.0 for a missing key, which would open a fresh
+    /// install invisible.
+    private var savedOpacity: Double {
+        let d = UserDefaults.standard
+        guard d.object(forKey: Self.opacityKey) != nil else { return 1.0 }
+        return min(1.0, max(Self.minOpacity, d.double(forKey: Self.opacityKey)))
+    }
+
+    /// (Re)applies the saved opacity to the live panel. Called at build time and on
+    /// every `show()` so a value changed while hidden always takes — the panel is
+    /// built once and reused, so a one-time set at build would otherwise stick.
+    private func applyOpacity() {
+        panel?.alphaValue = CGFloat(savedOpacity)
+    }
+
+    /// Live-updates the panel opacity from the slider and persists it. Clamped as a
+    /// final safety net; set directly (no animation) so dragging feels immediate.
+    func setOpacity(_ value: Double) {
+        let v = min(1.0, max(Self.minOpacity, value))
+        UserDefaults.standard.set(v, forKey: Self.opacityKey)
+        panel?.alphaValue = CGFloat(v)
     }
 
     /// Persist the panel's size after the user finishes a drag-resize, so it's
@@ -58,6 +87,9 @@ final class PanelController: NSObject, NSWindowDelegate {
         // Only (re)position on a fresh open — never on an append-capture, so a panel
         // the user dragged aside (or is typing in) doesn't get yanked back.
         if !panel.isVisible { positionPanel(panel, besideSelection: rect) }
+        // Re-apply the saved opacity before showing, so it's in effect with no
+        // full-alpha flash even if it changed while the panel was hidden.
+        applyOpacity()
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -73,6 +105,8 @@ final class PanelController: NSObject, NSWindowDelegate {
             self?.onClose()
         }, onAddScreenshot: { [weak self] in
             self?.onAddScreenshot()
+        }, initialOpacity: savedOpacity, onOpacityChange: { [weak self] in
+            self?.setOpacity($0)
         }))
         hosting.sizingOptions = []
         let size = savedSize
@@ -99,6 +133,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.hidesOnDeactivate = false
         panel.contentView = hosting
         self.panel = panel
+        applyOpacity()
         return panel
     }
 
