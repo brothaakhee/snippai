@@ -24,6 +24,9 @@ mkdir -p "${APP}/Contents/MacOS" "${APP}/Contents/Resources"
 cp "${BIN_PATH}" "${APP}/Contents/MacOS/SnippAI"
 cp "${ROOT}/Resources/Info.plist" "${APP}/Contents/Info.plist"
 printf 'APPL????' > "${APP}/Contents/PkgInfo"
+if [[ -f "${ROOT}/Resources/SnippAI.icns" ]]; then
+    cp "${ROOT}/Resources/SnippAI.icns" "${APP}/Contents/Resources/SnippAI.icns"
+fi
 
 echo "==> Codesigning..."
 # Prefer a STABLE self-signed identity ("SnippAI Dev") so TCC grants (Screen

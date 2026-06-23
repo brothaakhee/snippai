@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Hardened runtime is required for notarization. SnippAI is NOT sandboxed (it
+         drives other apps), so it needs the automation entitlement to send Apple Events
+         to iTerm2 / Terminal.app. Screen Recording and Accessibility are granted at
+         runtime via TCC and need no entitlement. -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+</dict>
+</plist>
