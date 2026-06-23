@@ -13,11 +13,14 @@
 html,body{background:#000}
 #stage{position:relative; width:1280px; height:720px; overflow:hidden; font-family:var(--body);
   background:radial-gradient(120% 120% at 30% 0%, #15181f 0%, #0a0b0d 55%, #08090b 100%);}
-#stage::after{content:""; position:absolute; inset:0; pointer-events:none;
+#stage::after{content:""; position:absolute; inset:0; pointer-events:none; z-index:0;
   background-image:radial-gradient(rgba(255,255,255,.025) 1px, transparent 1px); background-size:26px 26px}
 
+/* camera — the whole scene; we scale this to push in on the panel */
+#camera{position:absolute; inset:0; transform-origin:50% 50%; will-change:transform}
+
 /* faux app being screenshotted */
-#app{position:absolute; left:150px; top:120px; width:640px; height:470px; z-index:1;
+#app{position:absolute; left:150px; top:120px; width:640px; height:470px; z-index:1; will-change:filter;
   background:#0f1115; border:1px solid #1f232b; border-radius:14px; overflow:hidden;
   box-shadow:0 30px 70px -30px rgba(0,0,0,.7)}
 #app .top{display:flex; align-items:center; gap:10px; padding:18px 22px}
@@ -45,7 +48,7 @@ html,body{background:#000}
 #flash{position:absolute; inset:0; background:var(--mint); opacity:0; border-radius:2px}
 #cursor{position:absolute; z-index:9; left:0; top:0; width:22px; height:22px; will-change:transform}
 
-/* SnippAI panel mock (current design: colored source badge, bigger thumbnails) */
+/* SnippAI panel mock */
 #panelWrap{position:absolute; left:50%; top:50%; z-index:10; transform:translate(-50%,-50%)}
 #panel{width:540px; background:#101216; border:1px solid #23272f; border-radius:14px; overflow:hidden;
   font-size:13px; opacity:0; box-shadow:0 50px 110px -40px rgba(0,0,0,.95)}
@@ -79,64 +82,67 @@ html,body{background:#000}
 .pin .snd{width:30px;height:30px;border-radius:50%;background:var(--mint);color:#06150d;display:grid;place-items:center}
 .pin .snd svg{width:14px;height:14px}
 
-/* keycap caption (recurring) */
-#keycap{position:absolute; left:50%; bottom:46px; transform:translateX(-50%); z-index:12; opacity:0;
-  display:flex; align-items:center; gap:7px; font-family:var(--mono); color:var(--ink);
-  background:rgba(18,20,26,.94); border:1px solid #2d323c; padding:9px 15px; border-radius:12px;
-  box-shadow:0 18px 44px -14px rgba(0,0,0,.75)}
-#keycap kbd{font-family:var(--mono); font-size:14px; font-weight:500; color:var(--ink); background:#0c0e12;
-  border:1px solid #3a414d; border-bottom-width:2px; border-radius:6px; padding:2px 8px; min-width:26px; text-align:center}
-#keycap .lab{color:var(--muted); font-size:12.5px; margin-left:5px}
+/* LARGE keystroke HUD — shows the shortcut for each action, screen-fixed (not zoomed) */
+#keycap{position:absolute; left:50%; bottom:40px; transform:translateX(-50%); z-index:30; opacity:0;
+  display:flex; align-items:center; gap:13px; font-family:var(--mono);
+  background:rgba(13,15,20,.92); border:1px solid #313845; padding:16px 26px; border-radius:18px;
+  box-shadow:0 34px 80px -18px rgba(0,0,0,.85)}
+#keycap kbd{font-family:var(--mono); font-size:30px; font-weight:700; color:#fff; background:#0c0e12;
+  border:1px solid #49515f; border-bottom-width:3px; border-radius:11px; padding:6px 16px; min-width:56px; text-align:center; line-height:1.1}
+#keycap .plus{color:var(--faint); font-size:22px; font-weight:700}
+#keycap .lab{color:var(--muted); font-size:19px; font-weight:500; margin-left:10px}
 </style>
 </head>
 <body>
 <div id="stage">
-  <div id="app">
-    <div class="top"><span class="ico">&gt;_</span><span class="name">api</span></div>
-    <div class="tabs"><span>Deployments</span><span class="on">Variables</span><span>Metrics</span><span>Settings</span></div>
-    <div class="vars-h"><span>33 Service Variables</span><span class="q"></span></div>
-    <div class="row"><span class="k">DATABASE_URL</span><span class="v">••••••••••••••••</span></div>
-    <div class="row"><span class="k">NODE_ENV</span><span class="v">production</span></div>
-    <div class="row"><span class="k">PORT</span><span class="v">8080</span></div>
-    <div class="row"><span class="k">REDIS_URL</span><span class="v">••••••••••••</span></div>
-    <div class="banner"><span>🔗</span> Trying to connect a database? <b>Add Variable</b></div>
-  </div>
-
-  <div id="marquee">
-    <span class="tick tl"></span><span class="tick tr"></span><span class="tick bl"></span><span class="tick br"></span>
-    <span id="badge">0 × 0</span><span id="flash"></span>
-  </div>
-  <svg id="cursor" viewBox="0 0 22 22"><path d="M3 2l14 6.5-6 1.7-2.6 5.8z" fill="#fff" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/></svg>
-
-  <div id="panelWrap"><div id="panel">
-    <div class="pbar">
-      <div class="thumbs"><div class="thumb"></div><div class="thumb b"></div><div class="tadd">+</div></div>
-      <div><div class="nm">SnippAI</div><div class="s2" id="s2">→ claude-chat</div></div>
-      <div class="x">✕</div>
+  <div id="camera">
+    <div id="app">
+      <div class="top"><span class="ico">&gt;_</span><span class="name">api</span></div>
+      <div class="tabs"><span>Deployments</span><span class="on">Variables</span><span>Metrics</span><span>Settings</span></div>
+      <div class="vars-h"><span>33 Service Variables</span><span class="q"></span></div>
+      <div class="row"><span class="k">DATABASE_URL</span><span class="v">••••••••••••••••</span></div>
+      <div class="row"><span class="k">NODE_ENV</span><span class="v">production</span></div>
+      <div class="row"><span class="k">PORT</span><span class="v">8080</span></div>
+      <div class="row"><span class="k">REDIS_URL</span><span class="v">••••••••••••</span></div>
+      <div class="banner"><span>🔗</span> Trying to connect a database? <b>Add Variable</b></div>
     </div>
-    <div class="ptarget">
-      <span class="sp">✦</span>
-      <div id="idwrap">
-        <div class="ident" id="idA"><span class="nm">claude-chat</span><span class="srcbadge desktop">Claude Desktop</span></div>
-        <div class="ident" id="idB"><span class="nm">api-server</span><span class="srcbadge iterm">iTerm2</span></div>
+
+    <div id="marquee">
+      <span class="tick tl"></span><span class="tick tr"></span><span class="tick bl"></span><span class="tick br"></span>
+      <span id="badge">0 × 0</span><span id="flash"></span>
+    </div>
+    <svg id="cursor" viewBox="0 0 22 22"><path d="M3 2l14 6.5-6 1.7-2.6 5.8z" fill="#fff" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/></svg>
+
+    <div id="panelWrap"><div id="panel">
+      <div class="pbar">
+        <div class="thumbs"><div class="thumb"></div><div class="thumb b"></div><div class="tadd">+</div></div>
+        <div><div class="nm">SnippAI</div><div class="s2" id="s2">→ claude-chat</div></div>
+        <div class="x">✕</div>
       </div>
-      <span id="cyc">1/2 ⌘ ←→</span>
-      <span id="stateBadge"></span>
-    </div>
-    <div class="mir" id="mir"></div>
-    <div class="pin">
-      <div class="bx" id="ibox"><span class="ph">Tell Claude what to do…</span></div>
-      <div class="snd" id="snd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
-    </div>
-  </div></div>
+      <div class="ptarget">
+        <span class="sp">✦</span>
+        <div id="idwrap">
+          <div class="ident" id="idA"><span class="nm">claude-chat</span><span class="srcbadge desktop">Claude Desktop</span></div>
+          <div class="ident" id="idB"><span class="nm">api-server</span><span class="srcbadge iterm">iTerm2</span></div>
+        </div>
+        <span id="cyc">1/2 ⌘ ←→</span>
+        <span id="stateBadge"></span>
+      </div>
+      <div class="mir" id="mir"></div>
+      <div class="pin">
+        <div class="bx" id="ibox"><span class="ph">Tell Claude what to do…</span></div>
+        <div class="snd" id="snd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></div>
+      </div>
+    </div></div>
+  </div>
 
   <div id="keycap"></div>
 </div>
 
 <script>
 const $=id=>document.getElementById(id);
-const marquee=$('marquee'),badge=$('badge'),flash=$('flash'),cursor=$('cursor'),panel=$('panel'),
-  mir=$('mir'),ibox=$('ibox'),snd=$('snd'),stateBadge=$('stateBadge'),keycap=$('keycap'),
+const camera=$('camera'),app=$('app'),marquee=$('marquee'),badge=$('badge'),flash=$('flash'),cursor=$('cursor'),
+  panel=$('panel'),mir=$('mir'),ibox=$('ibox'),snd=$('snd'),stateBadge=$('stateBadge'),keycap=$('keycap'),
   idA=$('idA'),idB=$('idB'),cyc=$('cyc'),s2=$('s2');
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const seg=(p,a,b)=>clamp((p-a)/(b-a),0,1);
@@ -172,9 +178,23 @@ function renderMir(reveal, showCaret){
   }
   mir.innerHTML=html; mir.scrollTop=mir.scrollHeight;
 }
-function keycapHTML(keys,label){ return keys.map(k=>'<kbd>'+k+'</kbd>').join('')+'<span class="lab">'+label+'</span>'; }
+function keys(arr,label){
+  return arr.map(k=>'<kbd>'+k+'</kbd>').join('<span class="plus">+</span>')+'<span class="lab">'+label+'</span>';
+}
 
 window.setProgress=function(p){
+  // ── CAMERA: push in on the panel after it opens, pull back out after send ──
+  let z;
+  if(p<0.24) z=1;
+  else if(p<0.32) z=lerp(1,1.42, easeInOut(seg(p,0.24,0.32)));
+  else if(p<0.64) z=1.42;
+  else if(p<0.74) z=lerp(1.42,1, easeInOut(seg(p,0.64,0.74)));
+  else z=1;
+  camera.style.transform=`scale(${z})`;
+  // cinematic depth-of-field: blur + dim the background app while zoomed on the panel
+  const dof=clamp((z-1)/0.42,0,1);
+  app.style.filter=`blur(${(dof*5).toFixed(2)}px) brightness(${(1-dof*0.5).toFixed(3)})`;
+
   // ── CAPTURE (snappy) ──
   const travel=easeInOut(seg(p,0.00,0.04));
   const drag=easeInOut(seg(p,0.04,0.12));
@@ -196,7 +216,7 @@ window.setProgress=function(p){
   panel.style.opacity=ap*(1-out);
   panel.style.transform=`translateY(${lerp(14,0,ap)+out*10}px) scale(${lerp(0.94,1,ap)*lerp(1,0.97,out)})`;
 
-  // ── TARGET CYCLE (⌘→ Claude Desktop → iTerm2) — shows both targets + colored badges ──
+  // ── TARGET CYCLE (⌘→ Claude Desktop → iTerm2) ──
   const aOut=easeInOut(seg(p,0.30,0.335));
   const bIn=easeInOut(seg(p,0.335,0.37));
   idA.style.opacity=1-aOut; idA.style.transform=`translateX(${-30*aOut}px)`;
@@ -229,7 +249,7 @@ window.setProgress=function(p){
   if(p<0.60){ stateBadge.style.opacity=0; stateBadge.innerHTML=''; }
   else if(p<0.86){
     stateBadge.style.opacity=1; stateBadge.style.color='var(--muted)'; stateBadge.style.background='rgba(255,255,255,.07)'; stateBadge.style.transform='none';
-    const deg=Math.round(p*5400);   // deterministic continuous spin across frames
+    const deg=Math.round(p*5400);
     stateBadge.innerHTML='<span class="spk" style="transform:rotate('+deg+'deg)"></span> Working';
   } else {
     stateBadge.style.opacity=1; stateBadge.style.color='var(--mint)'; stateBadge.style.background='rgba(95,227,161,.14)';
@@ -237,15 +257,17 @@ window.setProgress=function(p){
     const pop=seg(p,0.86,0.91); stateBadge.style.transform=`scale(${1+Math.sin(pop*Math.PI)*0.13})`;
   }
 
-  // ── KEYCAP captions ──
-  const capV=Math.min(seg(p,0.00,0.02), 1-seg(p,0.085,0.115));
-  const cycV=Math.min(seg(p,0.26,0.285), 1-seg(p,0.37,0.40));
-  const sndV=Math.min(seg(p,0.555,0.575), 1-seg(p,0.63,0.66));
+  // ── LARGE keystroke HUD: one per action ──
+  const capV=Math.min(seg(p,0.01,0.04), 1-seg(p,0.13,0.17));     // ⌥⇧4 during capture
+  const cycV=Math.min(seg(p,0.265,0.30), 1-seg(p,0.40,0.435));   // ⌘→ during the switch
+  const sndV=Math.min(seg(p,0.545,0.575), 1-seg(p,0.64,0.675));  // ↵ during send
   let kv=0;
-  if(capV>0.001){ keycap.innerHTML=keycapHTML(['⌥','⇧','4'],'capture'); kv=capV; }
-  else if(cycV>0.001){ keycap.innerHTML=keycapHTML(['⌘','→'],'switch target'); kv=cycV; }
-  else if(sndV>0.001){ keycap.innerHTML=keycapHTML(['↵'],'send'); kv=sndV; }
+  if(capV>0.001){ keycap.innerHTML=keys(['⌥','⇧','4'],'capture'); kv=capV; }
+  else if(cycV>0.001){ keycap.innerHTML=keys(['⌘','→'],'switch target'); kv=cycV; }
+  else if(sndV>0.001){ keycap.innerHTML=keys(['↵'],'send'); kv=sndV; }
   keycap.style.opacity=kv;
+  // tiny rise as it appears, for a touch of life
+  keycap.style.transform=`translateX(-50%) translateY(${(1-kv)*8}px)`;
 };
 window.setProgress(0);
 </script>
