@@ -267,12 +267,14 @@ private struct ComposeView: View {
             // mint shortcut pill). Window/tab moves to a hover tooltip; the running
             // job (e.g. sourcekit-lsp) is dropped — it's incidental, not useful.
             if let src = session?.source, !src.isEmpty {
-                SourceBadge(source: src)
+                SourceBadge(source: src).layoutPriority(1)
             }
             // Hook-derived semantic state (Done / Needs you), when known. (No generic
             // "live" pulse — a blinking green dot reads as "the agent is working" even
             // when the session is idle; the mirror updating is itself the liveness cue.)
-            AgentStateBadge(state: state)
+            // Higher layout priority than the folder name: if the row is tight, the
+            // name truncates before the status badge does.
+            AgentStateBadge(state: state).layoutPriority(1)
         }
         .help(session?.locationLabel ?? "")
     }

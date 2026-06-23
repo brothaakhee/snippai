@@ -48,6 +48,10 @@ struct AgentStateBadge: View {
             .padding(.horizontal, showsLabel ? 6 : 3)
             .padding(.vertical, showsLabel ? 2 : 1)
             .background(state.tint.opacity(0.14), in: Capsule())
+            // The label is short and meaningful ("Working" / "Needs you"); it must never
+            // truncate. Render at intrinsic width so a tight row sheds the folder name
+            // (which already has lineLimit(1)) instead of clipping the status.
+            .fixedSize(horizontal: true, vertical: false)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Agent status: \(state.label)")
         }
