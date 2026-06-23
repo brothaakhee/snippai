@@ -91,8 +91,9 @@ kbd{font-family:var(--mono); font-size:12px; background:var(--surface); border:1
 .brand:focus-visible,.dl:focus-visible,.btn:focus-visible,.foot a:focus-visible,.pill:focus-visible{outline:2px solid var(--ink); outline-offset:3px; border-radius:8px}
 .btn:focus-visible,.dl:focus-visible{outline-color:#fff; outline-offset:2px}
 
-/* target pills */
-.pills{margin-top:30px; display:flex; gap:10px; flex-wrap:wrap; justify-content:center}
+/* target pills — sit above the video as the 'works with' info */
+.pills{margin-top:16px; display:flex; gap:9px; flex-wrap:wrap; justify-content:center; align-items:center}
+.pills .pwith{font-family:var(--mono); font-size:12px; color:var(--faint); letter-spacing:.04em; margin-right:2px}
 .pill{font-family:var(--mono); font-size:12px; padding:6px 13px; border-radius:99px; border:1px solid var(--line2); background:var(--surface); color:var(--muted); display:inline-flex; align-items:center; gap:7px}
 .pill .d{width:6px;height:6px;border-radius:50%}
 .pill .d.m{background:var(--mint)} .pill .d.b{background:var(--blue)} .pill .d.v{background:var(--violet)}
@@ -123,6 +124,13 @@ footer{border-top:1px solid var(--line); padding:26px 0}
   <h1>Screenshot, straight into Claude</h1>
   <p class="sub">Grab a region of your screen — it lands <b>right in the Claude Code session you're already running</b>. Terminal or desktop app, no alt-tab.</p>
 
+  <div class="pills">
+    <span class="pwith">Works with</span>
+    <span class="pill"><span class="d m"></span> iTerm2</span>
+    <span class="pill"><span class="d b"></span> Terminal.app</span>
+    <span class="pill"><span class="d v"></span> Claude Desktop</span>
+  </div>
+
   <div class="scope">
     <span class="tk tl"></span><span class="tk tr"></span><span class="tk bl"></span><span class="tk br"></span>
     <span class="lbl">REC · demo.mp4</span>
@@ -139,20 +147,14 @@ footer{border-top:1px solid var(--line); padding:26px 0}
     <div class="meta">
       <span class="keys"><kbd>⌥</kbd> <kbd>⇧</kbd> <kbd>4</kbd> to capture</span>
       <!-- EDIT-PRICE (keep in sync with the footer) -->
-      <span class="price">7-day free trial, then <b>$29 once</b> — no subscription</span>
+      <span class="price">7-day free trial, then <b>$8.99 once</b> — no subscription</span>
     </div>
-  </div>
-
-  <div class="pills">
-    <span class="pill"><span class="d m"></span> iTerm2</span>
-    <span class="pill"><span class="d b"></span> Terminal.app</span>
-    <span class="pill"><span class="d v"></span> Claude Desktop</span>
   </div>
 </main>
 
 <footer>
   <div class="wrap foot">
-    <!-- EDIT-PRICE --><div>$29 once · macOS 14+</div>
+    <!-- EDIT-PRICE --><div>$8.99 once · macOS 14+</div>
     <div class="links">
       <a href="mailto:hello@snippai.app">Support</a>
       <a href="#download">Download</a>
