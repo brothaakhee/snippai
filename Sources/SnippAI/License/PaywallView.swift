@@ -17,12 +17,26 @@ struct PaywallView: View {
     @State private var key = ""
     @State private var activating = false
     @State private var error: String?
+    @State private var succeeded = false
 
     private var canActivate: Bool {
         !activating && !key.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     var body: some View {
+        Group {
+            if succeeded { successView } else { mainContent }
+        }
+        .frame(width: 440).frame(minHeight: 300)
+        .background(PanelStyle.surface)
+        .tint(PanelStyle.accent)
+        .environment(\.colorScheme, .dark)
+        .snippaiDynamicTypeClamp()
+        .animation(.easeInOut(duration: 0.2), value: succeeded)
+        .animation(.easeInOut(duration: 0.15), value: error)
+    }
+
+    private var mainContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider().opacity(0.5)
@@ -40,12 +54,26 @@ struct PaywallView: View {
             Divider().opacity(0.5)
             footer
         }
-        .frame(width: 440)
-        .background(PanelStyle.surface)
-        .tint(PanelStyle.accent)
-        .environment(\.colorScheme, .dark)
-        .snippaiDynamicTypeClamp()
-        .animation(.easeInOut(duration: 0.15), value: error)
+    }
+
+    /// Shown briefly after a successful activation before the window dismisses and the
+    /// in-flight action proceeds — so unlocking is an unmistakable, satisfying moment.
+    private var successView: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                Circle().fill(PanelStyle.accent.opacity(0.16)).frame(width: 66, height: 66)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(PanelStyle.accent)
+            }
+            Text("You're all set").scaledFont(19, weight: .semibold)
+            Text("SnippAI is unlocked — thank you for the support.")
+                .scaledFont(12.5).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(40)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .transition(.opacity)
     }
 
     // MARK: Header
@@ -162,7 +190,9 @@ struct PaywallView: View {
             activating = false
             switch result {
             case .success:
-                onActivated()
+                succeeded = true                       // show the "You're all set" confirmation…
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                onActivated()                          // …then dismiss and continue the action
             case .failure(let message):
                 error = message
             }
