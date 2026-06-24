@@ -211,6 +211,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let setupItem = NSMenuItem(title: "Permissions…", action: #selector(menuSetup), keyEquivalent: "")
         setupItem.target = self
         menu.addItem(setupItem)
+        let uninstallItem = NSMenuItem(title: "Uninstall SnippAI…", action: #selector(menuUninstall), keyEquivalent: "")
+        uninstallItem.target = self
+        menu.addItem(uninstallItem)
         menu.addItem(.separator())
         // Appears only when the update check finds a newer build (hidden otherwise).
         let updateItem = NSMenuItem(title: "Update SnippAI…", action: #selector(menuUpdate), keyEquivalent: "")
@@ -255,6 +258,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func menuSettings() { settings.show() }
 
     @objc private func menuSetup() { onboarding.show() }
+
+    /// Confirms, then fully uninstalls SnippAI: removes its Claude Code hooks, deletes
+    /// its preferences/support/cache, moves the app to the Trash, and quits — so the
+    /// user never has to hunt down leftover files or broken hook entries by hand.
+    @objc private func menuUninstall() {
+        let alert = NSAlert()
+        alert.messageText = "Uninstall SnippAI?"
+        alert.informativeText = """
+        This removes SnippAI's Claude Code hooks, deletes its preferences and data, and moves the app to the Trash.
+
+        Your purchase isn't affected — you can reinstall and re-activate your license any time. This can't be undone.
+        """
+        alert.alertStyle = .warning
+        let uninstallButton = alert.addButton(withTitle: "Uninstall")
+        uninstallButton.hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        NSApp.setActivationPolicy(.regular)        // ensure the modal is focusable
+        NSApp.activate(ignoringOtherApps: true)
+        let choice = alert.runModal()
+        NSApp.setActivationPolicy(.accessory)
+        guard choice == .alertFirstButtonReturn else { return }
+        performUninstall()
+    }
+
+    private func performUninstall() {
+        let fm = FileManager.default
+        let home = fm.homeDirectoryForCurrentUser
+
+        // 1. Remove our hooks from ~/.claude/settings.json FIRST (while the script still
+        //    exists), so we never strand orphaned entries.
+        hookController.removeHooksForUninstall()
+
+        // 2. Delete app data: Application Support (hook script + trial mirror), prefs, cache.
+        try? fm.removeItem(at: home.appendingPathComponent("Library/Application Support/SnippAI"))
+        if let bid = Bundle.main.bundleIdentifier {
+            UserDefaults.standard.removePersistentDomain(forName: bid)
+            try? fm.removeItem(at: home.appendingPathComponent("Library/Preferences/\(bid).plist"))
+            try? fm.removeItem(at: home.appendingPathComponent("Library/Caches/\(bid)"))
+        }
+
+        // 3. Move the app bundle itself to the Trash (best-effort; a read-only or
+        //    permission-restricted location just leaves the bundle for the user to drag).
+        try? fm.trashItem(at: Bundle.main.bundleURL, resultingItemURL: nil)
+
+        // 4. Quit.
+        NSApp.terminate(nil)
+    }
 
     @objc private func menuOpenPanel() {
         // Opening the panel is a way to use the app, so it goes through the same gate as

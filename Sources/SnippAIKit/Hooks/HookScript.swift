@@ -37,8 +37,12 @@ public enum HookScript {
     /// find and remove exactly our entries on uninstall.
     public static let commandMarker = "snippai-hook.sh"
 
-    /// The settings.json command string for a given hook event.
+    /// The settings.json command string for a given hook event. Defensively wrapped so
+    /// that if the script ever goes missing (e.g. the user drags SnippAI to the Trash
+    /// without removing the hooks first), the entry becomes a clean no-op instead of
+    /// erroring on every Claude Code session — it checks the script exists, runs it if
+    /// so, and always exits 0. The `snippai-hook.sh` marker stays present for removal.
     public static func command(scriptPath: String, event: String) -> String {
-        "'\(scriptPath)' \(event)"
+        "/bin/sh -c '[ -x \"\(scriptPath)\" ] && \"\(scriptPath)\" \(event); exit 0'"
     }
 }

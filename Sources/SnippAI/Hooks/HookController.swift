@@ -75,6 +75,15 @@ final class HookController {
         }
     }
 
+    /// Removes SnippAI's hooks from settings.json regardless of the on/off state and
+    /// stops the listener — used by the in-app uninstall so we never leave orphaned
+    /// hook entries behind. Best-effort and safe when no hooks are present.
+    func removeHooksForUninstall() {
+        stopServer()
+        try? installer.disable()
+        persist(false)
+    }
+
     // MARK: - Private
 
     private func startServer() throws {

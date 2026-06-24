@@ -123,4 +123,34 @@ final class HookInstallerTests: XCTestCase {
             .filter { $0.hasPrefix("settings.json.snippai-backup.") }
         XCTAssertEqual(backups.count, 1, "exactly one timestamped backup should exist")
     }
+
+    // MARK: - Defensive command wrapping
+
+    func testCommandIsDefensivelyWrappedYetStillMarked() {
+        let cmd = HookScript.command(scriptPath: "/tmp/SnippAI/snippai-hook.sh", event: "Stop")
+        // Still removable: the marker substring must survive the wrapping.
+        XCTAssertTrue(cmd.contains(HookScript.commandMarker))
+        // Defensive: guards the script's existence and always exits 0, so a leftover hook
+        // whose script was deleted (uninstall-by-trash) is a clean no-op, not an error.
+        XCTAssertTrue(cmd.contains("[ -x "), "command should guard script existence")
+        XCTAssertTrue(cmd.contains("exit 0"), "command should always exit 0")
+        XCTAssertTrue(cmd.contains("Stop"), "event should be passed through")
+    }
+
+    func testWrappedCommandIsNoOpWhenScriptMissing() throws {
+        // Run the exact command we install, pointed at a non-existent script: it must
+        // exit 0 with no error (the bug this guards against was exit 127 + stderr).
+        let cmd = HookScript.command(scriptPath: "/tmp/snippai-missing-\(UUID().uuidString)/snippai-hook.sh", event: "Stop")
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/sh")
+        proc.arguments = ["-c", cmd]
+        let errPipe = Pipe()
+        proc.standardError = errPipe
+        proc.standardInput = Pipe()   // the script reads stdin; give it an empty one
+        try proc.run()
+        proc.waitUntilExit()
+        let err = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        XCTAssertEqual(proc.terminationStatus, 0, "missing-script hook must exit 0")
+        XCTAssertTrue(err.isEmpty, "missing-script hook must not write to stderr; got: \(err)")
+    }
 }
