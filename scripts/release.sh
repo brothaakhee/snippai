@@ -88,7 +88,7 @@ fi
 cat > "${DIST}/appcast.json" <<EOF
 {
   "version": "${VERSION}",
-  "url": "https://github.com/brothaakhee/snippai/releases/latest/download/SnippAI.dmg",
+  "url": "https://github.com/brothaakhee/snippai-releases/releases/latest/download/SnippAI.dmg",
   "notes": "See the release notes on GitHub."
 }
 EOF
@@ -98,4 +98,4 @@ echo "==> Done."
 echo "    DMG:     ${DMG}"
 echo "    Feed:    ${DIST}/appcast.json"
 echo "    Upload BOTH as assets on the GitHub Release tagged v${VERSION}, e.g.:"
-echo "      gh release create v${VERSION} \"${DMG}\" \"${DIST}/appcast.json\" --title \"SnippAI v${VERSION}\" --generate-notes"
+echo "      gh release create v${VERSION} --repo brothaakhee/snippai-releases \"${DMG}\" \"${DIST}/appcast.json\" --title \"SnippAI v${VERSION}\" --generate-notes"

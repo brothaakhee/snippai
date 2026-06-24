@@ -7,7 +7,7 @@ import Foundation
 public enum VersionConfig {
     // The update feed + download page. The feed is a tiny JSON file published as a
     // GitHub Release asset (stable "latest" URL); the download page is the site.
-    public static let feedURL = URL(string: "https://github.com/brothaakhee/snippai/releases/latest/download/appcast.json")!
+    public static let feedURL = URL(string: "https://github.com/brothaakhee/snippai-releases/releases/latest/download/appcast.json")!
     public static let downloadPageURL = URL(string: "https://snippai.dev")!
 }
 
