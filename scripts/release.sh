@@ -61,15 +61,53 @@ codesign --force --options runtime --timestamp \
     --sign "${SIGN_ID}" "${APP}"
 codesign --verify --strict --verbose=2 "${APP}"
 
-# --- Build the DMG ----------------------------------------------------------
-echo "==> Building DMG..."
+# --- Build the DMG (styled: custom background + drag-to-Applications layout) -
+# Uses Finder via AppleScript to set the window background, icon size, and the
+# SnippAI → Applications layout. Needs Automation permission to control Finder
+# (granted once, interactively) and a GUI session — i.e. run this on a Mac, not
+# headless CI.
+echo "==> Building styled DMG..."
 mkdir -p "${DIST}"
 rm -f "${DMG}"
+VOL="SnippAI"
 STAGE="$(mktemp -d)"
 cp -R "${APP}" "${STAGE}/SnippAI.app"
 ln -s /Applications "${STAGE}/Applications"
-hdiutil create -volname "SnippAI" -srcfolder "${STAGE}" -ov -format UDZO "${DMG}" >/dev/null
-rm -rf "${STAGE}"
+mkdir "${STAGE}/.background"
+cp "${ROOT}/Resources/dmg/background.png" "${STAGE}/.background/background.png"
+
+# Read-write image so Finder can persist the view options into its .DS_Store.
+hdiutil detach "/Volumes/${VOL}" >/dev/null 2>&1 || true
+RW="$(mktemp -d)/rw.dmg"
+hdiutil create -volname "${VOL}" -srcfolder "${STAGE}" -ov -format UDRW -fs HFS+ "${RW}" >/dev/null
+hdiutil attach "${RW}" -noautoopen >/dev/null
+
+osascript <<APPLESCRIPT
+tell application "Finder"
+  tell disk "${VOL}"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set the bounds of container window to {200, 120, 860, 540}
+    set opts to the icon view options of container window
+    set arrangement of opts to not arranged
+    set icon size of opts to 128
+    set text size of opts to 12
+    set background picture of opts to file ".background:background.png"
+    set position of item "SnippAI.app" of container window to {170, 200}
+    set position of item "Applications" of container window to {490, 200}
+    update without registering applications
+    delay 1
+    close
+  end tell
+end tell
+APPLESCRIPT
+
+sync
+hdiutil detach "/Volumes/${VOL}" >/dev/null
+hdiutil convert "${RW}" -format UDZO -imagekey zlib-level=9 -ov -o "${DMG}" >/dev/null
+rm -rf "${STAGE}" "$(dirname "${RW}")"
 codesign --force --timestamp --sign "${SIGN_ID}" "${DMG}"
 
 # --- Notarize + staple ------------------------------------------------------
