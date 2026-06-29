@@ -61,13 +61,23 @@ final class LicenseStore {
 
     /// `now`, but never earlier than any time we've previously observed — so setting the
     /// system clock backwards can't lengthen the trial.
+    ///
+    /// This is a *pure* read: it must never mutate state, because it's evaluated inside
+    /// SwiftUI view bodies (via `entitlement`). Mutating an `@Observable` property here
+    /// would invalidate the reading view on every frame and spin a render loop. The
+    /// high-water mark is advanced separately by `advanceHighWaterMark()`.
     private var effectiveNow: Date {
+        max(highWaterMark, Date())
+    }
+
+    /// Records that we've now observed at least the current wall-clock time, persisting
+    /// it when it moves the high-water mark forward. Call only from non-render contexts
+    /// (launch, capture evaluation, validation) — never from a view body.
+    private func advanceHighWaterMark() {
         let now = Date()
-        if now > highWaterMark {
-            highWaterMark = now
-            defaults.set(now, forKey: Key.highWater)
-        }
-        return highWaterMark
+        guard now > highWaterMark else { return }
+        highWaterMark = now
+        defaults.set(now, forKey: Key.highWater)
     }
 
     // MARK: - Entitlement
@@ -119,6 +129,7 @@ final class LicenseStore {
     /// Whether the next capture is allowed, must show the paywall (with a "Maybe later"
     /// escape while deferrals remain), or must show a mandatory paywall.
     func evaluateCapture() -> CaptureGate {
+        advanceHighWaterMark()
         switch entitlement {
         case .licensed, .trial:
             return .allowed
@@ -176,6 +187,7 @@ final class LicenseStore {
     /// (offline grace) but downgrades immediately if the server says the key is no
     /// longer valid (refund / disable / deactivated elsewhere).
     func revalidateInBackground() async {
+        advanceHighWaterMark()
         guard let key = licenseKey else { return }
         do {
             let response = try await client.validate(licenseKey: key, instanceId: instanceId)
