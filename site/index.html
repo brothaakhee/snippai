@@ -153,13 +153,15 @@ footer{border-top:1px solid var(--line); padding:26px 0}
     <div class="meta">
       <!-- EDIT-PRICE (keep in sync with the footer) -->
       <span class="price">7-day free trial, then <b>$8.99 once</b> — no subscription</span>
+      <!-- rel-version is refreshed live from the latest GitHub release; the literal is the fallback. -->
+      <span>Latest version <b class="rel-version">v1.0.3</b></span>
     </div>
   </div>
 </main>
 
 <footer>
   <div class="wrap foot">
-    <!-- EDIT-PRICE --><div>$8.99 once · macOS 14+</div>
+    <!-- EDIT-PRICE --><div>$8.99 once · macOS 14+ · <span class="rel-version">v1.0.3</span></div>
     <div class="links">
       <a href="mailto:hello@snippai.dev">Support</a>
       <a href="https://github.com/brothaakhee/snippai-releases/releases/latest/download/SnippAI.dmg">Download</a>
@@ -178,6 +180,13 @@ footer{border-top:1px solid var(--line); padding:26px 0}
     const v=document.querySelector('.scope video');
     if (v){ v.removeAttribute('autoplay'); v.loop=false; v.pause(); }
   }
+
+  // Keep the displayed version in sync with the newest published release, so a new
+  // DMG doesn't require a site edit. Falls back to the literal in the markup.
+  fetch('https://api.github.com/repos/brothaakhee/snippai-releases/releases/latest')
+    .then(r => r.ok ? r.json() : null)
+    .then(d => { const t=d&&(d.tag_name||d.name); if(t) document.querySelectorAll('.rel-version').forEach(e=>e.textContent=t); })
+    .catch(()=>{});
 </script>
 </body>
 </html>
