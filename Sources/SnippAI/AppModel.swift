@@ -381,6 +381,19 @@ final class AppModel {
         }
     }
 
+    /// Brings the selected session's terminal (or app) to the front so the user can
+    /// jump straight to where their message landed. Best-effort: surfaces a status
+    /// message on failure rather than interrupting with an error.
+    func focusSelectedSession() {
+        guard let sessionID = selectedSessionID else { return }
+        // Capture the name now: the user may cycle targets before the async call returns.
+        let appName = selectedSession?.source ?? "the terminal"
+        Task {
+            do { try await adapter.focus(sessionID: sessionID) }
+            catch { statusMessage = "Couldn’t open \(appName)" }
+        }
+    }
+
     func teardown() {
         streamTask?.cancel()
         streamTask = nil

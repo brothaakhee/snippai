@@ -253,13 +253,19 @@ public actor ITermClient {
         _ = try await rpc(.closeRequest(req))
     }
 
-    /// Brings a session to the foreground.
+    /// Brings a session to the foreground — selecting its tab/session, ordering its
+    /// window front, and raising iTerm itself. Without `activateApp`, iTerm only
+    /// reorders windows internally and never comes forward over the active app.
     public func activate(sessionID: String) async throws {
         var req = Iterm2_ActivateRequest()
         req.sessionID = sessionID
         req.orderWindowFront = true
         req.selectTab = true
         req.selectSession = true
+        var app = Iterm2_ActivateRequest.App()
+        app.raiseAllWindows = true
+        app.ignoringOtherApps = true
+        req.activateApp = app
         _ = try await rpc(.activateRequest(req))
     }
 

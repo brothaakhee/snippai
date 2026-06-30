@@ -84,7 +84,10 @@ private struct TitleBar: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
+        // Top-align so the chrome (title + opacity/close buttons) sits at the top of
+        // the row rather than centering against the tall attachment thumbnail — a
+        // close button belongs in the top-right corner, not floating mid-height.
+        HStack(alignment: .top, spacing: 10) {
             attachments
             VStack(alignment: .leading, spacing: 1) {
                 Text("SnippAI").scaledFont(14, weight: .semibold)
@@ -250,6 +253,63 @@ private struct AddScreenshotButton: View {
     }
 }
 
+/// The selected session's identity (icon · name · source · status), made into a
+/// clickable affordance that brings that terminal/app to the front. Reads as a
+/// distinct interactive chip: it tints on hover and reveals an "open" glyph, matching
+/// the picker rows' hover treatment.
+private struct TargetIdentity: View {
+    let session: TerminalSession?
+    let state: AgentState
+    let onTap: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 7) {
+                Image(systemName: session?.looksLikeAgent == true ? "sparkles" : "terminal")
+                    .foregroundStyle(session?.looksLikeAgent == true ? PanelStyle.accent : .secondary)
+                    .scaledFont(12)
+                Text(session?.folderName ?? "session")
+                    .scaledFont(13, weight: .semibold)
+                    .lineLimit(1)
+                // Which app the session lives in, as a colored badge (distinct from the
+                // mint shortcut pill).
+                if let src = session?.source, !src.isEmpty {
+                    SourceBadge(source: src).layoutPriority(1)
+                }
+                // Hook-derived semantic state (Done / Needs you), when known. Higher
+                // layout priority than the name: if the row is tight, the name truncates
+                // before the status badge does.
+                AgentStateBadge(state: state).layoutPriority(1)
+                // Reveal an "open" glyph on hover so the chip reads as clickable.
+                Image(systemName: "arrow.up.forward.app")
+                    .scaledFont(11, weight: .semibold)
+                    .foregroundStyle(.secondary)
+                    .opacity(hovering ? 1 : 0)
+                    .layoutPriority(1)
+            }
+            .padding(.horizontal, 7).padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: PanelStyle.controlRadius)
+                    .fill(hovering ? Color.primary.opacity(0.08) : Color.primary.opacity(0.035))
+            )
+            .contentShape(RoundedRectangle(cornerRadius: PanelStyle.controlRadius))
+        }
+        .buttonStyle(.plain)
+        .disabled(session == nil)
+        .onHover { h in withAnimation(.easeInOut(duration: 0.1)) { hovering = h } }
+        .help(helpText)
+    }
+
+    private var helpText: String {
+        let app = session?.source.isEmpty == false ? session!.source : "the terminal"
+        if let loc = session?.locationLabel, !loc.isEmpty {
+            return "Bring \(app) to the front — \(loc)"
+        }
+        return "Bring \(app) to the front"
+    }
+}
+
 /// The app a session lives in, as a small colored capsule. Terminals share one
 /// color; the Claude desktop app gets its own so it stands apart in the picker/header.
 private struct SourceBadge: View {
@@ -321,7 +381,9 @@ private struct ComposeView: View {
             // switch reads as directional motion. A constant-width, clipped container
             // keeps the right-hand controls from reflowing as the name changes.
             ZStack(alignment: .leading) {
-                targetIdentity(session: model.selectedSession, state: selectedAgentState)
+                TargetIdentity(session: model.selectedSession,
+                               state: selectedAgentState,
+                               onTap: { model.focusSelectedSession() })
                     .id(model.selectedSessionID)
                     .transition(identityTransition)
             }
@@ -339,29 +401,6 @@ private struct ComposeView: View {
         model.selectedSessionID.map { model.agentState(for: $0) } ?? .unknown
     }
 
-    private func targetIdentity(session: TerminalSession?, state: AgentState) -> some View {
-        HStack(spacing: 7) {
-            Image(systemName: session?.looksLikeAgent == true ? "sparkles" : "terminal")
-                .foregroundStyle(session?.looksLikeAgent == true ? PanelStyle.accent : .secondary)
-                .scaledFont(12)
-            Text(session?.folderName ?? "session")
-                .scaledFont(13, weight: .semibold)
-                .lineLimit(1)
-            // Which app the session lives in, as a colored badge (distinct from the
-            // mint shortcut pill). Window/tab moves to a hover tooltip; the running
-            // job (e.g. sourcekit-lsp) is dropped — it's incidental, not useful.
-            if let src = session?.source, !src.isEmpty {
-                SourceBadge(source: src).layoutPriority(1)
-            }
-            // Hook-derived semantic state (Done / Needs you), when known. (No generic
-            // "live" pulse — a blinking green dot reads as "the agent is working" even
-            // when the session is idle; the mirror updating is itself the liveness cue.)
-            // Higher layout priority than the folder name: if the row is tight, the
-            // name truncates before the status badge does.
-            AgentStateBadge(state: state).layoutPriority(1)
-        }
-        .help(session?.locationLabel ?? "")
-    }
 
     @ViewBuilder
     private var switchControls: some View {
