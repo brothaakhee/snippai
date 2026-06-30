@@ -15,8 +15,9 @@ final class OnboardingController: NSObject, NSWindowDelegate {
 
     var isReady: Bool { model.snapshot.allReady }
 
-    func show() {
+    func show(startAt page: OnboardingModel.Page = .checklist) {
         model.refresh()
+        model.page = page
         if let window {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -82,16 +83,19 @@ final class OnboardingController: NSObject, NSWindowDelegate {
     // MARK: - First-run policy
 
     static let completedKey = "didCompleteOnboarding"
+    static let welcomeSeenKey = "didSeeWelcome"
 
-    /// Shows onboarding on first run (or any run where setup is incomplete).
-    /// If everything is already granted on first run, silently marks it complete.
+    /// Shows onboarding on first run (or any run where setup is incomplete). The very
+    /// first time, it opens on the "How it works" walkthrough; once that's been seen,
+    /// later incomplete-setup launches go straight to the permission checklist. If
+    /// everything is already granted on first run, silently marks it complete.
     func showIfNeeded() {
         let defaults = UserDefaults.standard
         if defaults.bool(forKey: OnboardingController.completedKey) { return }
         if PermissionsService.snapshot().allReady {
             defaults.set(true, forKey: OnboardingController.completedKey)
         } else {
-            show()
+            show(startAt: defaults.bool(forKey: OnboardingController.welcomeSeenKey) ? .checklist : .welcome)
         }
     }
 }

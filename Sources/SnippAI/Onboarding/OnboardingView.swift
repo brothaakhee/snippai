@@ -8,23 +8,37 @@ struct OnboardingView: View {
     var onDone: () -> Void
 
     var body: some View {
+        Group {
+            if model.page == .welcome {
+                WelcomeCarousel(shortcutDisplay: shortcutDisplay,
+                                onGetStarted: { withAnimation(.easeInOut) { model.advanceToChecklist() } })
+            } else {
+                checklist
+            }
+        }
+    }
+
+    private var checklist: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
             VStack(alignment: .leading, spacing: 10) {
+                if !model.duplicateCopies.isEmpty { duplicateBanner }
                 screenRecordingRow
                 sectionLabel("Connect iTerm2")
                 iTermRunningRow
                 iTermAPIRow
                 automationRow
+                if model.snapshot.claudeDesktopInstalled {
+                    sectionLabel("Claude desktop app (optional)")
+                    accessibilityRow
+                }
             }
             .padding(20)
             Divider()
             footer
         }
-        .frame(width: 460)
-        .background(.regularMaterial)
-        .snippaiDynamicTypeClamp()
+        .snippaiWindowChrome()
     }
 
     // MARK: Header
@@ -55,7 +69,13 @@ struct OnboardingView: View {
     }
 
     private var screenRecordingRow: some View {
-        PermissionRow(
+        // Offer the stale-grant repair only while it's not actually granted — that's
+        // when "shows on in Settings but the app is denied" can happen (after a re-sign).
+        let showRepair = model.snapshot.screenRecording == .notDetermined
+                      || model.snapshot.screenRecording == .denied
+        var repair: (() -> Void)?
+        if showRepair { repair = model.repairScreenRecording }
+        return PermissionRow(
             icon: "rectangle.dashed.badge.record",
             title: "Screen Recording",
             detail: model.needsRelaunch
@@ -63,8 +83,46 @@ struct OnboardingView: View {
                 : "Lets SnippAI capture the region you select.",
             state: model.snapshot.screenRecording,
             actionTitle: model.needsRelaunch ? "Relaunch" : "Grant…",
-            action: { model.needsRelaunch ? model.relaunch() : model.grantScreenRecording() }
+            action: { model.needsRelaunch ? model.relaunch() : model.grantScreenRecording() },
+            secondaryTitle: showRepair ? "Shows as allowed in Settings but still blocked? Reset & relaunch." : nil,
+            secondaryAction: repair
         )
+    }
+
+    private var accessibilityRow: some View {
+        PermissionRow(
+            icon: "accessibility",
+            title: "Control the Claude app",
+            detail: "Lets SnippAI type your message into the Claude desktop app.",
+            state: model.snapshot.accessibility,
+            actionTitle: "Grant…",
+            action: model.grantAccessibility
+        )
+    }
+
+    private var duplicateBanner: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .scaledFont(15).foregroundStyle(.orange).frame(width: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Multiple copies of SnippAI found").scaledFont(13, weight: .semibold)
+                    Text("Keep only the one in Applications — granting permission to a stray copy won't apply here.")
+                        .scaledFont(11).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+            }
+            HStack(spacing: 8) {
+                Spacer()
+                Button("Reveal in Finder", action: model.revealDuplicates)
+                    .controlSize(.small)
+                Button("Remove extras", action: model.removeDuplicates)
+                    .controlSize(.small)
+            }
+        }
+        .padding(12)
+        .background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: PanelStyle.cardRadius))
     }
 
     private var iTermRunningRow: some View {
@@ -141,6 +199,9 @@ private struct PermissionRow: View {
     let action: () -> Void
     var busy = false
     var enabled = true
+    /// Optional tertiary "link" shown beneath the row (e.g. a repair affordance).
+    var secondaryTitle: String?
+    var secondaryAction: (() -> Void)?
     @ScaledMetric(relativeTo: .body) private var iconWidth: CGFloat = 22
 
     /// What to show as the row's secondary line: the "do X first" reason when the
@@ -148,9 +209,22 @@ private struct PermissionRow: View {
     private var effectiveDetail: String { enabled ? detail : (disabledReason ?? detail) }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            statusBadge   // kept full-opacity so "done vs not" always reads
-            content.opacity(enabled ? 1 : 0.6)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 12) {
+                statusBadge   // kept full-opacity so "done vs not" always reads
+                content.opacity(enabled ? 1 : 0.6)
+            }
+            if let secondaryTitle, let secondaryAction {
+                Button(action: secondaryAction) {
+                    Text(secondaryTitle)
+                        .scaledFont(10)
+                        .foregroundStyle(Color.accentColor)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, iconWidth + 12)   // align under the title text
+            }
         }
         .padding(12)
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))

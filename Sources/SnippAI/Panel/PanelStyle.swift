@@ -47,6 +47,14 @@ extension View {
         dynamicTypeSize(PanelStyle.typeRange)
             .modifier(DebugDynamicTypeModifier())
     }
+
+    /// The shared chrome for SnippAI's fixed-width auxiliary windows (onboarding,
+    /// welcome carousel, settings): a 460pt material panel with the type clamp.
+    func snippaiWindowChrome() -> some View {
+        frame(width: 460)
+            .background(.regularMaterial)
+            .snippaiDynamicTypeClamp()
+    }
 }
 
 private struct DebugDynamicTypeModifier: ViewModifier {

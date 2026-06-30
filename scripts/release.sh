@@ -35,6 +35,20 @@ if [[ -z "${SIGN_ID}" ]]; then
     echo "error: no 'Developer ID Application' identity found. Set SIGN_ID=..." >&2
     exit 1
 fi
+
+# Pin the signing Team ID. macOS TCC ties Screen Recording / Accessibility grants to
+# the signing certificate — shipping with a DIFFERENT identity silently revokes those
+# permissions for EVERY existing user (their toggle stays on, but the app is denied).
+# Refuse unless the change is explicitly acknowledged.
+EXPECTED_TEAM="WP368XBRDU"
+ACTUAL_TEAM="$(printf '%s' "${SIGN_ID}" | sed -n 's/.*(\([A-Z0-9]\{10\}\))$/\1/p')"
+if [[ "${ACTUAL_TEAM}" != "${EXPECTED_TEAM}" ]]; then
+    echo "error: signing team '${ACTUAL_TEAM:-unknown}' != expected '${EXPECTED_TEAM}'." >&2
+    echo "       Shipping with a different certificate BREAKS Screen Recording / Accessibility" >&2
+    echo "       for ALL existing users. If this identity change is intentional, re-run with" >&2
+    echo "       ALLOW_TEAM_CHANGE=1." >&2
+    [[ "${ALLOW_TEAM_CHANGE:-}" == "1" ]] || exit 1
+fi
 echo "==> Release v${VERSION}  ·  signing as: ${SIGN_ID}"
 
 # --- Build + assemble -------------------------------------------------------

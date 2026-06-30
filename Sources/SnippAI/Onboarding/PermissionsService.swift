@@ -17,6 +17,10 @@ struct PermissionsSnapshot: Equatable {
     var iTermRunning = false
     var iTermAPIEnabled = false
     var iTermAutomation: PermissionState = .notDetermined
+    /// Accessibility is only needed to type into the Claude desktop app, so it's
+    /// surfaced but never gates `allReady`.
+    var accessibility: PermissionState = .notDetermined
+    var claudeDesktopInstalled = false
 
     /// True when a capture + send can actually succeed end to end.
     var allReady: Bool {
@@ -28,6 +32,8 @@ struct PermissionsSnapshot: Equatable {
 /// non-prompting so the onboarding UI can reflect real state without side effects.
 enum PermissionsService {
     static let iTermBundleID = "com.googlecode.iterm2"
+    static let claudeDesktopBundleID = "com.anthropic.claudefordesktop"
+    static var bundleID: String { Bundle.main.bundleIdentifier ?? "com.snippai.app" }
 
     /// Whether Screen Recording was already granted when this process started.
     /// A grant made *after* launch (in-app prompt or System Settings) doesn't reach
@@ -42,6 +48,8 @@ enum PermissionsService {
         s.iTermRunning = isITermRunning()
         s.iTermAPIEnabled = isITermAPIEnabled()
         s.iTermAutomation = s.iTermRunning ? automationState() : .blocked("iTerm2 isn’t running")
+        s.claudeDesktopInstalled = isClaudeDesktopInstalled
+        s.accessibility = isAccessibilityTrusted() ? .granted : .notDetermined
         return s
     }
 
@@ -90,6 +98,25 @@ enum PermissionsService {
     static func openScreenRecordingSettings() {
         open("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
     }
+
+    /// Clears SnippAI's Screen Recording TCC decision so a fresh grant binds to the
+    /// CURRENT signing identity. Cures "Settings shows the toggle on, but the app is
+    /// still denied" — which happens after the binary is re-signed (a notarized build
+    /// replaced by a dev build, or a changed certificate). The caller must relaunch
+    /// afterward so a new preflight baseline is read.
+    static func resetScreenRecordingPermission() {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        p.arguments = ["reset", "ScreenCapture", bundleID]
+        try? p.run()
+        p.waitUntilExit()
+    }
+
+    /// Whether the Claude desktop app is installed — gates the optional Accessibility
+    /// step, which is only needed to type into that app. Cached: it's a LaunchServices
+    /// lookup and install state doesn't change within a session.
+    static let isClaudeDesktopInstalled: Bool =
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: claudeDesktopBundleID) != nil
 
     static func openAutomationSettings() {
         open("x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")

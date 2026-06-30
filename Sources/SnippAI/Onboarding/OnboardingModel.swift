@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import Observation
 
@@ -6,19 +7,37 @@ import Observation
 @MainActor
 @Observable
 final class OnboardingModel {
+    /// Which page of the onboarding window is showing: the "How it works" intro or
+    /// the permission checklist.
+    enum Page { case welcome, checklist }
+    var page: Page = .checklist
+
     var snapshot = PermissionsSnapshot()
     var automationError: String?
     var busyAction: String?
+    /// Stray SnippAI bundles besides the running one — a permission granted to one of
+    /// these wouldn't apply to the app the user is actually running.
+    var duplicateCopies: [URL] = []
 
     /// Whether Screen Recording is granted but the app must relaunch to use it.
     var needsRelaunch: Bool { snapshot.screenRecording == .needsRelaunch }
 
-    init() { refresh() }
+    init() {
+        refresh()
+        refreshDuplicates()
+    }
 
     func refresh() {
         snapshot = PermissionsService.snapshot()
         // Don't keep showing a stale error once access is actually granted.
         if snapshot.iTermAutomation == .granted { automationError = nil }
+    }
+
+    /// Re-scans for stray copies. Kept out of `refresh()` (which runs on every window
+    /// activation and after each grant) because the copy set only changes when we
+    /// remove one — a LaunchServices query on every activation would be wasted work.
+    private func refreshDuplicates() {
+        duplicateCopies = InstallGuard.otherCopies()
     }
 
     func grantScreenRecording() {
@@ -29,6 +48,42 @@ final class OnboardingModel {
         PermissionsService.requestScreenRecording()
         PermissionsService.openScreenRecordingSettings()
         refresh()
+    }
+
+    /// Leaves the intro for the permission checklist, remembering that the user has
+    /// seen the walkthrough so it isn't forced again on later incomplete-setup launches.
+    func advanceToChecklist() {
+        UserDefaults.standard.set(true, forKey: OnboardingController.welcomeSeenKey)
+        page = .checklist
+    }
+
+    /// Repairs a stale Screen Recording grant (Settings shows it on, but the app is
+    /// denied because the binary was re-signed) by clearing the TCC decision and
+    /// relaunching so a clean grant can bind to the current identity.
+    func repairScreenRecording() {
+        PermissionsService.resetScreenRecordingPermission()
+        PermissionsService.relaunch()
+    }
+
+    /// Prompts for Accessibility (needed only to type into the Claude desktop app).
+    /// Takes effect immediately for CGEvent — no relaunch required.
+    func grantAccessibility() {
+        PermissionsService.requestAccessibility()
+        PermissionsService.openAccessibilitySettings()
+        refresh()
+    }
+
+    func revealDuplicates() {
+        guard !duplicateCopies.isEmpty else { return }
+        NSWorkspace.shared.activateFileViewerSelecting(duplicateCopies)
+    }
+
+    func removeDuplicates() {
+        InstallGuard.removeCopies(duplicateCopies)
+        // Reflect immediately; LaunchServices may lag, so clear optimistically and
+        // re-scan once it's caught up.
+        duplicateCopies = []
+        Task { try? await Task.sleep(nanoseconds: 600_000_000); refreshDuplicates() }
     }
 
     func launchITerm() {

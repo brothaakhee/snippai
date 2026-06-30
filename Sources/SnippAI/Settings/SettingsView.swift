@@ -38,9 +38,7 @@ struct SettingsView: View {
             Divider()
             footer
         }
-        .frame(width: 460)
-        .background(.regularMaterial)
-        .snippaiDynamicTypeClamp()
+        .snippaiWindowChrome()
         .onDisappear { recorder.stop() }
     }
 

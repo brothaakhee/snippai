@@ -32,6 +32,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // If we're running from a location where macOS can't persist permissions
+        // (the DMG, Downloads, or a translocated path), move into /Applications and
+        // relaunch from there. The process is terminating — stop launching.
+        if InstallGuard.relocateIfNeeded() { return }
+
         NSApp.setActivationPolicy(.accessory)
         installMainMenu()
         CaptureController.sweepOldScreenshots()
@@ -70,9 +75,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // Debug: force the onboarding window open for inspection.
-        if ProcessInfo.processInfo.environment["SNIPPAI_SHOW_ONBOARDING"] == "1" {
-            onboarding.show()
+        // Debug: force the onboarding window open for inspection. Pass "welcome" to
+        // open on the intro carousel, anything else truthy for the permission checklist.
+        if let mode = ProcessInfo.processInfo.environment["SNIPPAI_SHOW_ONBOARDING"], !mode.isEmpty {
+            onboarding.show(startAt: mode == "welcome" ? .welcome : .checklist)
             return
         }
 
@@ -205,6 +211,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelItem.target = self
         menu.addItem(panelItem)
         menu.addItem(.separator())
+        let howItWorksItem = NSMenuItem(title: "How It Works…", action: #selector(menuHowItWorks), keyEquivalent: "")
+        howItWorksItem.target = self
+        menu.addItem(howItWorksItem)
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(menuSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
@@ -257,7 +266,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func menuSettings() { settings.show() }
 
-    @objc private func menuSetup() { onboarding.show() }
+    @objc private func menuSetup() { onboarding.show(startAt: .checklist) }
+    @objc private func menuHowItWorks() { onboarding.show(startAt: .welcome) }
 
     /// Confirms, then fully uninstalls SnippAI: removes its Claude Code hooks, deletes
     /// its preferences/support/cache, moves the app to the Trash, and quits — so the
