@@ -2,6 +2,8 @@
 
 A native macOS app that collapses *"screenshot → cmd-tab to your terminal → paste the image → type → enter"* into **one step on one screen**, wired directly into a running Claude Code session.
 
+![SnippAI demo — grab a screen region and fire it, with a message, straight into your running Claude Code session](marketing/demo.gif)
+
 > **Status:** **POC built and verified end-to-end.** A native Swift menu-bar app (SwiftPM, AppKit + SwiftUI) captures a screen region, lists live iTerm2 sessions with rich labels, mirrors the chosen session's screen, and sends `message + screenshot path` straight into it. The native iTerm tunnel, the ScreenCaptureKit capture, the crosshair overlay, the session picker, and the live mirror are each verified working (screenshots below). Build it with `./scripts/build_app.sh`.
 
 ---
