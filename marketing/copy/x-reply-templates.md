@@ -59,7 +59,7 @@ screenshot a bug → save → alt-tab to the terminal → drag it in → type �
 So I built SnippAI. One hotkey. One screen. The screenshot lands straight in your Claude
 Code session.
 
-[attach ~15s vertical demo clip] 🧵
+[attach marketing/demo-vertical.mp4 — 9:16 vertical clip] 🧵
 ```
 
 **Tweet 2 (how it works):**

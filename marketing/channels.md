@@ -113,9 +113,10 @@ faster than a paragraph. We already have `site/demo.mp4`; cut, don't re-record.
 **Effort:** low-medium (edit existing footage; one short written post).
 
 **Do this:**
-- Cut `../site/demo.mp4` into (a) a looping GIF for the README + Reddit posts, and (b) a ~15-sec
-  vertical clip for X / YouTube Shorts.
-- Embed the GIF in the repo README and every launch post.
+- Cut `../site/demo.mp4` into (a) a looping GIF for the README + Reddit posts, and (b) a
+  vertical 9:16 clip for X / YouTube Shorts. **Both exist:** `demo.gif` and
+  `demo-vertical.mp4` (1080×1920, branded title + CTA) in this folder.
+- Embed the GIF in the repo README and every launch post; attach the vertical MP4 on X/Shorts.
 - One short blog / dev.to piece: **"I stopped alt-tabbing screenshots into Claude Code."**
   Problem → the fix → how the native iTerm2 hookup works → trial link.
 
