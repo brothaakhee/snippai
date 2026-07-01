@@ -17,8 +17,8 @@ strategy, per-channel playbooks, and ready-to-paste copy. Keep it updated as thi
 | [launch-checklist.md](launch-checklist.md) | Sequenced, checkbox launch runbook |
 | [copy/](copy/) | Ready-to-use drafts: Show HN, Product Hunt, Reddit, X |
 
-Assets in this folder: `demo.gif` (800×450 looping — README/Reddit hero), `demo-vertical.mp4`
-(1080×1920 branded clip — X/Shorts), `app-icon-1024.png`, `lemonsqueezy-checkout.png`,
+Assets in this folder: `demo.gif` (880×604 looping, panel-focused — README/Reddit hero),
+`demo-vertical.mp4` (1080×1920 branded clip, panel-focused — X/Shorts), `app-icon-1024.png`, `lemonsqueezy-checkout.png`,
 `lemonsqueezy-productshot.png`. Source demo video lives at `../site/demo.mp4` (+ `demo-poster.jpg`).
 
 ## The one-paragraph thesis
