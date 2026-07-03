@@ -41,12 +41,14 @@ final class SelectionOverlayController {
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
             let view = SelectionView(frame: NSRect(origin: .zero, size: screen.frame.size))
             view.screenRef = screen
+            #if DEBUG
             // Debug: seed a demo selection so the full overlay UI can be screenshotted.
             if screen == NSScreen.main, ProcessInfo.processInfo.environment["SNIPPAI_DEMO_RECT"] == "1" {
                 let f = screen.frame.size
                 view.demoRect = NSRect(x: f.width * 0.28, y: f.height * 0.30,
                                        width: f.width * 0.42, height: f.height * 0.34)
             }
+            #endif
             view.onFinish = { [weak self] result in self?.finish(result) }
             view.onCancel = { [weak self] in self?.finish(nil) }
             window.contentView = view

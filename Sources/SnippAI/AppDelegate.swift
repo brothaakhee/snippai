@@ -9,10 +9,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let onboarding = OnboardingController()
     private let shortcutStore = ShortcutStore()
     private let licenseStore = LicenseStore()
+    private let launchAtLoginStore = LaunchAtLoginStore()
     private let updateController = UpdateController()
     private lazy var paywallController = PaywallController()
     private lazy var hookController = HookController(model: model)
-    private lazy var settings = SettingsController(store: shortcutStore, hooks: hookController, license: licenseStore)
+    private lazy var settings = SettingsController(store: shortcutStore, hooks: hookController, license: licenseStore, launchAtLogin: launchAtLoginStore)
     private var statusItem: NSStatusItem?
     private var captureMenuItem: NSMenuItem?
     private var updateMenuItem: NSMenuItem?
@@ -69,6 +70,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateController.onChange = { [weak self] in self?.refreshUpdateMenuItem() }
         updateController.checkInBackground()
 
+        #if DEBUG
+        // Debug builds only: env-var hooks for self-tests and UI screenshots. Kept out
+        // of release binaries entirely — some (SNIPPAI_AUTO_PANEL, SNIPPAI_TEST_DESKTOP_
+        // INJECT) reach the send path without passing the capture/paywall gate.
+
         // Debug: self-test the ScreenCaptureKit path on an explicit global rect.
         if let spec = ProcessInfo.processInfo.environment["SNIPPAI_TEST_CAPTURE"] {
             runCaptureSelfTest(spec)
@@ -87,10 +93,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settings.show()
             return
         }
+        #endif
 
         // First-run: guide the two macOS permission gates before the first capture.
         onboarding.showIfNeeded()
 
+        #if DEBUG
         // Debug: show the crosshair overlay so it can be screenshotted.
         if ProcessInfo.processInfo.environment["SNIPPAI_TEST_OVERLAY"] == "1" {
             beginCapture()
@@ -119,8 +127,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let msg = ProcessInfo.processInfo.environment["SNIPPAI_TEST_DESKTOP_INJECT"], !msg.isEmpty {
             Task { await runDesktopInjectSelfTest(msg) }
         }
+        #endif
     }
 
+    #if DEBUG
     /// Discovers the Claude desktop session and injects `message` via the live path.
     /// Writes the outcome to /tmp/snippai-inject-test.log (GUI-app stdout isn't a tty).
     private func runDesktopInjectSelfTest(_ message: String) async {
@@ -150,6 +160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             report("DESKTOP_INJECT_FAIL \((error as? LocalizedError)?.errorDescription ?? "\(error)")")
         }
     }
+    #endif
 
     /// Installs a minimal main menu with a standard Edit menu. SnippAI is an accessory
     /// app (no menu bar by default), so without this the system clipboard shortcuts
@@ -387,6 +398,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    #if DEBUG
     /// Captures `x,y,w,h` (global, bottom-left coords) on the main screen, prints
     /// the result path, and exits — used to verify the capture path headlessly.
     private func runCaptureSelfTest(_ spec: String) {
@@ -405,6 +417,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.terminate(nil)
         }
     }
+    #endif
 
     private func presentError(_ error: Error) {
         // A missing capture permission is exactly what onboarding exists to fix —

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SnippAIKit
 import Observation
@@ -111,14 +112,18 @@ final class AppModel {
         pickerQuery = ""
         connectionError = nil
         await refreshSessions()   // sets selectedSessionID to the last-used / preferred session
+        var forcePicker = false
+        #if DEBUG
         if ProcessInfo.processInfo.environment["SNIPPAI_DEMO_STATES"] == "1" { seedDemoStates() }
-        let forcePicker = ProcessInfo.processInfo.environment["SNIPPAI_FORCE_PICKER"] == "1"
+        forcePicker = ProcessInfo.processInfo.environment["SNIPPAI_FORCE_PICKER"] == "1"
+        #endif
         // Always drop straight into the terminal for the resolved target (the
         // last-used session, per refreshSessions' selection) to cut steps — even if
         // it isn't obviously an agent. The picker only appears when there's nothing
         // to target. Switch later via ⌘-arrow or "Change".
         if !forcePicker, let session = selectedSession {
             startComposing(sessionID: session.id)
+            #if DEBUG
             // Debug (SNIPPAI_DEMO_CYCLE=1): auto-cycle the target so the ⌘-arrow
             // behavior + directional slide can be screenshotted without synthetic keys.
             if ProcessInfo.processInfo.environment["SNIPPAI_DEMO_CYCLE"] == "1" {
@@ -129,6 +134,7 @@ final class AppModel {
                     }
                 }
             }
+            #endif
         } else {
             phase = .picking
             pickerFocusToken += 1
@@ -227,19 +233,18 @@ final class AppModel {
         }
     }
 
+    #if DEBUG
     /// Debug (SNIPPAI_MIRROR_TRANSCRIPT): mirror a specific transcript file directly,
     /// so the native chat can be inspected/screenshotted against a real conversation.
     func debugMirrorTranscript(path: String) {
         phase = .composing
         transcriptMirror.bind(toPath: path)
     }
+    #endif
 
     func backToPicker() {
-        streamTask?.cancel()
-        streamTask = nil
-        transcriptMirror.stop()
+        teardown()
         conversation.reset()
-        streamGeneration += 1   // invalidate the cancelled stream's late writes
         pickerQuery = ""
         justSent = false
         statusMessage = nil
@@ -362,6 +367,7 @@ final class AppModel {
         guard !composed.isEmpty else { return }
         isSending = true
         defer { isSending = false }
+        guard await confirmTargetCanReceive(sessionID: sessionID) else { return }
         do {
             // The adapter owns submission (iTerm appends a newline; Terminal's
             // `do script` auto-submits). We pass a single-line message so it lands
@@ -381,6 +387,39 @@ final class AppModel {
         }
     }
 
+    /// Guards against typing into a pane whose agent has exited: the message (text +
+    /// screenshot path) would land at the shell prompt and run as a shell command.
+    /// Re-discovers at send time — the cached session list can be stale, and "Claude
+    /// exited since the panel opened" is exactly the dangerous case. A terminal pane
+    /// that isn't running an agent CLI needs explicit confirmation; a vanished session
+    /// blocks the send outright. Desktop targets have no shell, so they skip the check,
+    /// and a failed discovery falls through to `send`, whose error path covers a dead
+    /// connection.
+    private func confirmTargetCanReceive(sessionID: String) async -> Bool {
+        guard let cached = sessions.first(where: { $0.id == sessionID }),
+              cached.hasScreenStream else { return true }
+        guard let discovered = try? await adapter.discover() else { return true }
+        // Don't discard the round trip — fold the fresh discovery into the identity
+        // maps (same bookkeeping refreshSessions does) while we have it.
+        observeDiscovered(discovered)
+        guard let current = discovered.first(where: { $0.id == sessionID }) else {
+            connectionError = "That session is no longer open. Choose another target."
+            return false
+        }
+        if current.looksLikeAgent { return true }
+
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "This pane isn’t running an AI agent"
+        alert.informativeText = """
+        The \(current.source) pane in “\(current.folderName)” is running “\(current.jobName)”. \
+        Your message would be typed at the shell prompt — and could run as a shell command.
+        """
+        alert.addButton(withTitle: "Cancel")            // default (Return) — safe choice
+        alert.addButton(withTitle: "Send Anyway")
+        return alert.runModal() == .alertSecondButtonReturn
+    }
+
     /// Brings the selected session's terminal (or app) to the front so the user can
     /// jump straight to where their message landed. Best-effort: surfaces a status
     /// message on failure rather than interrupting with an error.
@@ -394,9 +433,14 @@ final class AppModel {
         }
     }
 
+    /// Stops all live mirroring (terminal screen stream + transcript tailer). Called
+    /// when the panel closes — otherwise the stream keeps round-tripping full screen
+    /// buffers in the background for as long as the app runs. Reopening the panel
+    /// always goes through `beginSession` → `startComposing`, which restarts it.
     func teardown() {
         streamTask?.cancel()
         streamTask = nil
+        streamGeneration += 1   // invalidate the cancelled stream's late writes
         transcriptMirror.stop()
     }
 
@@ -433,6 +477,7 @@ final class AppModel {
         if agentStates.count != before { notifyAttention() }
     }
 
+    #if DEBUG
     /// Debug only (SNIPPAI_DEMO_STATES=1): paints a spread of agent states across the
     /// discovered sessions so the badge UI can be screenshotted without a live Claude.
     private func seedDemoStates() {
@@ -442,6 +487,7 @@ final class AppModel {
         }
         notifyAttention()
     }
+    #endif
 
     /// Seeds identities without disturbing UI — used at launch / on enable so the
     /// menu-bar badge can light up before the panel is ever opened.

@@ -96,6 +96,10 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     func hide() {
         panel?.orderOut(nil)
+        // Stop the live mirror streams — a hidden panel must not keep fetching and
+        // rendering screen buffers in the background. `beginSession` restarts them
+        // on the next open.
+        model.teardown()
     }
 
     private func existingOrNewPanel() -> KeyablePanel {

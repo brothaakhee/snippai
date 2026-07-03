@@ -92,14 +92,17 @@ final class LicenseStore {
     }
 
     var entitlement: Entitlement {
-        // Debug: force a state so the trial/paywall UI can be exercised without waiting
-        // out a real trial. SNIPPAI_FAKE_ENTITLEMENT = expired | licensed | trial.
+        #if DEBUG
+        // Debug builds only: force a state so the trial/paywall UI can be exercised
+        // without waiting out a real trial. SNIPPAI_FAKE_ENTITLEMENT = expired | licensed
+        // | trial. Must never ship in release — it would be a paywall bypass.
         switch ProcessInfo.processInfo.environment["SNIPPAI_FAKE_ENTITLEMENT"] {
         case "expired":  return .expired
         case "licensed": return .licensed
         case "trial":    return .trial(daysRemaining: 3)
         default: break
         }
+        #endif
         if isLicensedNow { return .licensed }
         let days = TrialClock.daysRemaining(firstLaunch: firstLaunch, now: effectiveNow)
         return days > 0 ? .trial(daysRemaining: days) : .expired

@@ -29,8 +29,10 @@ enum InstallGuard {
     /// MUST abort the rest of launch, because the process is terminating.
     @discardableResult
     static func relocateIfNeeded() -> Bool {
+        #if DEBUG
         // Escape hatch for development and tests (e.g. running build/SnippAI.app).
         if ProcessInfo.processInfo.environment["SNIPPAI_NO_RELOCATE"] == "1" { return false }
+        #endif
 
         let current = Bundle.main.bundleURL.resolvingSymlinksInPath()
         guard needsRelocation(current.path) else { return false }

@@ -4,146 +4,57 @@ A native macOS app that collapses *"screenshot → cmd-tab to your terminal → 
 
 ![SnippAI demo — grab a screen region and fire it, with a message, straight into your running Claude Code session](marketing/demo.gif)
 
-> **Status:** **POC built and verified end-to-end.** A native Swift menu-bar app (SwiftPM, AppKit + SwiftUI) captures a screen region, lists live iTerm2 sessions with rich labels, mirrors the chosen session's screen, and sends `message + screenshot path` straight into it. The native iTerm tunnel, the ScreenCaptureKit capture, the crosshair overlay, the session picker, and the live mirror are each verified working (screenshots below). Build it with `./scripts/build_app.sh`.
+> **Status: shipped.** v1.0.x is live at [snippai.dev](https://snippai.dev) — Developer ID signed, notarized DMG, 7-day free trial, then $8.99 once (Lemon Squeezy).
+> Requires **macOS 14+** and **iTerm2 or Terminal.app** (Claude Desktop is supported in beta; Warp/Ghostty/kitty aren't supported yet).
 
 ---
 
-## The idea
+## What it does
 
-You're working on an app in a Claude Code session. You load the app in the browser, spot a UI bug, and take a screenshot. Today you then alt-tab back to your terminal, drag/paste the image in, and type "fix this." SnippAI replaces that whole dance: take the screenshot, and a panel appears right there to type your message and fire it — plus the screenshot — straight into the **existing** Claude session you were already working in. The response streams back in the same panel.
+You're working on an app in a Claude Code session. You load it in the browser, spot a UI bug — press **⌥⇧4**, drag a region, type "fix this" in the panel that appears, hit enter. The screenshot + your message land **in the Claude Code session you already have running**, and the response streams back live in the same panel. No file juggling, no alt-tab.
 
-### Non-negotiables
-**Fast · feels native · not buggy · perfect UI · perfect UX.**
+- **Capture we own** — global hotkey (rebindable) → crosshair overlay → ScreenCaptureKit → PNG. The panel opens with pixels already in hand. Multi-display + Retina aware.
+- **Session picker** — every live session with rich labels (folder · job · window/tab/pane · last line), agent sessions badged, last-used pinned on top, ⌘-arrows to cycle targets.
+- **Live terminal mirror** — the panel renders the session's real emulated screen cells (ANSI colors, cursor and all). It's a second window onto the *same* session — no fork, no second process.
+- **Claude Code status** *(opt-in, default-off)* — a fail-open shell hook pipes Stop/Notification events to an in-app AF_UNIX socket, driving a **Done / Needs you** badge in the picker, panel, and menu bar. One-click install/uninstall, never blocks Claude.
+- **Send guard** — if the target pane isn't running an agent CLI anymore (Claude exited → you'd be typing into your shell), SnippAI re-checks at send time and asks before sending.
+- **Licensing, onboarding, updates** — 7-day trial with a soft paywall, first-run permission checklist (Screen Recording, Automation), launch-at-login toggle, lightweight update check against the latest GitHub release, full uninstall (including hook removal).
 
----
+## Supported targets
 
-## Architecture (locked)
-
-### 1. Capture — we own it
-Register our own global hotkey (can rebind ⌘⇧4), draw our own crosshair selection overlay (a transparent borderless `NSPanel`), and capture pixels via **ScreenCaptureKit**. We deliberately do **not** rely on the system screenshot + watching the save folder — that's racy and slow. Owning capture means the panel appears instantly with pixels already in hand.
-
-- Permissions: Screen Recording (TCC). Accessibility only if later required.
-- Shell: menu-bar app (`LSUIElement`, no dock icon). Swift + AppKit for the overlay/hotkey/panel; SwiftUI for panel content.
-
-### 2. Integration strategy — augment, don't replace. **iTerm first.**
-We keep the user's existing Claude session exactly where it is. We do **not** ask them to adopt a new terminal.
-
-**Hard constraint (verified via Claude Code docs):** there is no supported way to inject into a live interactive `claude` we don't host — no socket/pipe/IPC, the Agent SDK can't attach, and a running session ignores external edits to its on-disk JSONL transcript. `--resume` always spawns a *new* process from saved state (the "split session" fork we must avoid). Channels / remote-control exist but are research-preview and cloud-routed — not for the POC.
-
-The escape hatch is the terminal emulator's own API.
-
-### 3. The tunnel — iTerm2's scripting API
-iTerm2 exposes a local scripting API (protobuf over a websocket on a Unix socket) that lets an external process:
-- **enumerate** every session (id + working directory + title) — feeds our picker,
-- **send** text to a *specific* session by id,
-- **stream** that session's screen contents back live (event-driven).
-
-iTerm owns the PTY; our panel is just a second window onto the *same* live session — so there is **no split** and **no second process**. The user can type in our panel or in iTerm and both stay in sync.
-
-- Setup gate: the user enables "Enable Python API" once (Settings → General → Magic) and approves a one-time permission dialog on first connect. This is the real onboarding friction, and it's small.
-
-### 4. The panel — Flavor A: a faithful terminal mirror
-The panel renders the chosen session's already-emulated screen cells (no VT100 emulator to build). It looks like Claude's TUI — spinners, redraws and all. The user types → Enter → we send `message + screenshot file path` (Claude's Read tool ingests the local PNG, so no native image attachment is needed) → they watch Claude work in the panel.
-
-A cleaned-up native chat UI (Flavor B) was rejected for the POC: it requires parsing the unstable TUI, which is brittle. A real native-chat mode would require *hosting* the session (the "host model") and is the **v2 north star**, offered as a separate engine behind the same panel.
-
-### 5. Overall shape — target picker + per-target adapters
-The panel shows discoverable sessions; a router dispatches to a per-target delivery adapter:
-
-| Adapter | Capability | Status |
+| Adapter | Mechanism | Fidelity |
 |---|---|---|
-| iTerm2 | enumerate + send + stream a specific session | ✅ built (native client) |
-| Terminal.app | AppleScript: discover / send / poll-stream / focus | ✅ built |
-| Claude Code desktop app | **probed — not viable.** Electron web content is opaque to Accessibility (no input/sessions exposed) and there's no public injection API. See [Probed](#probed-the-claude-desktop-app-is-not-adaptable). | ❌ rejected |
-| Hosted PTY | we own stdin/stdout; perfect targeting; enables Flavor B | v2 |
+| **iTerm2** | Native Swift client speaking iTerm2's scripting API — AppleScript cookie/key auth → hand-rolled WebSocket (RFC 6455) over its Unix domain socket → SwiftProtobuf from a version-exact `proto/api.proto`. Enumerate / send / stream / focus. | Full: event-driven live mirror with per-cell color |
+| **Terminal.app** | AppleScript: discover / send / poll-stream / focus | Plain-text mirror, polled |
+| **Claude Desktop** *(beta)* | `claude://` focus → clipboard swap → synthetic ⌘V + Return (CGEvent), with frontmost-app guards and clipboard restore; a transcript-tailing native chat mirror is the display (Electron exposes no terminal screen). Needs the Accessibility grant; briefly focus-steals the Claude window per send. | Transcript mirror; injection is best-effort |
 
----
+Why the terminal API route: there is **no supported way to inject into a live interactive `claude`** you don't host — no socket/IPC, the Agent SDK can't attach, external transcript edits are ignored, and `--resume` forks a new session. The terminal emulator's own scripting API is the escape hatch; iTerm2's was verified at ~22ms round-trip by a native Swift spike (`swift run iterm-spike`). An early Accessibility probe (`tools/ax_probe.swift`) showed Electron exposes no AX tree for the desktop app, which is why desktop injection uses clipboard+keystroke instead — and why it's labeled beta.
 
-## Verified: the tunnel is real
+## Permissions & setup
 
-A de-risking spike ([`spike_iterm.py`](./spike_iterm.py)) proved the full loop against a live iTerm, **all green**:
+First run walks through a checklist: **Screen Recording** (capture), **Automation → iTerm2/Terminal** (the tunnel), and for iTerm2 a one-time "Enable Python API" toggle (Settings → General → Magic) + Allow dialog. That's the whole onboarding — about 10 seconds.
 
-```
-[PASS] ENUMERATE   7 live sessions, each with id + cwd + title
-[PASS] SEND        injected "echo … look at /tmp/…png" into a chosen session
-[PASS] STREAM      read it back live — round-trip 48ms
----> ALL GREEN — tunnel is real
-```
+## Develop
 
-- **48ms** send → execute → read-back, locally, event-driven — comfortably inside "feels instant."
-- `iterm2` lib 2.20 works on Python 3.14.
-- Confirmed gate: the iTerm2 Python API must be enabled + a one-time Allow dialog approved.
-
-### Concrete finding that shapes the UI
-On a real machine the spike found **5 sessions sharing one working directory, 4 of them with blank titles.** So the session picker **cannot disambiguate by cwd alone.** It will need richer labels — last-active time, the last on-screen line, window/tab position, or a small live screen-preview thumbnail.
-
----
-
-## Probed: the Claude desktop app is *not* adaptable
-
-A hands-on Accessibility probe ([`tools/ax_probe.swift`](./tools/ax_probe.swift)) against the live Claude desktop app (`com.anthropic.claudefordesktop`, an Electron app — Claude Code runs inside it) answers open question #3 with a firm **no**:
-
-```
-AXIsProcessTrusted: true
-set AXManualAccessibility: ok        (but tree never populates — known Electron bug)
-windows: 1   total AX nodes: ~13   AXWebArea: 0   text inputs: 0
-VERDICT: BLOCKED — Chromium web content not exposed to Accessibility.
-```
-
-The entire chat UI lives in an opaque `AXWebArea` Chromium doesn't surface, so **sessions are not individually addressable and there is no settable input to inject a message/screenshot into.** Cross-checked against Anthropic docs:
-
-- **No public injection API** for a *running* desktop conversation. The only documented push mechanism is Claude Code **Channels** — CLI-only, research-preview, cloud-routed via Telegram/Discord/iMessage plugins — not the desktop app (consistent with the [locked architecture](#2-integration-strategy--augment-dont-replace-iterm-first)).
-- The **`claude://` URL scheme** only *prefills a new session* (`q=` text, ~14k chars, **no image attach**) — it can't target an existing conversation. `claude-cli://` is a launcher. Both are the rejected "spawn a new process" pattern, and neither carries an image.
-- Forcing Chromium's a11y tree needs `--force-renderer-accessibility` (a relaunch) or VoiceOver already running — neither is something SnippAI can do to a user's live app.
-
-**Conclusion:** the desktop app is rejected as an adapter. When the user runs Claude Code in a **terminal** (the common case), the verified iTerm2 adapter already covers it; Terminal.app is the natural next adapter.
-
----
-
-## Open questions / decisions pending
-1. ~~**iTerm client in the real app:** native Swift vs bundled Python.~~ **RESOLVED → native Swift, verified.** A native client (`Sources/SnippAIKit/ITerm/`) speaks the exact wire protocol — AppleScript cookie/key → WebSocket over iTerm2's **Unix domain socket** (`~/Library/Application Support/iTerm2/private/socket`) → SwiftProtobuf messages generated from a version-exact `proto/api.proto`. The Swift spike (`swift run iterm-spike`) is **ALL GREEN at 22ms round-trip** with **zero Python runtime** in the app. (Note: the protocol is served on the Unix socket, not TCP `:1912` as the reference lib's fallback URI implies; the native client connects to the socket directly.)
-2. **Picker labeling** design, given the multi-session finding above.
-3. ~~**Claude Code desktop app** adapter viability.~~ **RESOLVED → not viable** (see [Probed](#probed-the-claude-desktop-app-is-not-adaptable)).
-
-## What's built (POC)
-
-A native Swift app, no Python runtime. `SnippAIKit` is the engine (iTerm client + protocol + models); `SnippAI` is the menu-bar app.
-
-- **Native iTerm2 client** — AppleScript cookie/key → hand-rolled WebSocket (RFC 6455) over iTerm2's Unix domain socket → SwiftProtobuf messages generated from a version-exact `proto/api.proto`. Enumerate / send / stream / variables / activate. (`Sources/SnippAIKit/ITerm/`)
-- **Capture** — Carbon global hotkey (default ⌥⇧4, no Accessibility needed) → full-screen crosshair overlay (dim + clear selection hole + live dimension badge) → ScreenCaptureKit region capture → PNG. Multi-display + retina aware. (`Sources/SnippAI/Capture/`)
-- **Panel** (SwiftUI in a floating `NSPanel`) — screenshot header, **session picker** with rich disambiguating labels (folder · job · window/tab/pane · last on-screen line, agent sessions badged), a **live terminal mirror** that renders the session's emulated cells with ANSI colors + the cursor, and a message input. (`Sources/SnippAI/Panel/`)
-- **Adapter abstraction + router** — `TargetAdapter` protocol with two live impls (iTerm2 native client, Terminal.app via AppleScript). `AdapterRouter` connects to whatever's running, merges discovered sessions into one picker (tagged by source), and routes send/stream/focus back to the owning adapter. Terminal.app has no event stream or per-cell color, so its mirror is plain text refreshed by polling — a fidelity tradeoff vs the native iTerm2 client. (The Claude desktop app was probed and rejected — see [Probed](#probed-the-claude-desktop-app-is-not-adaptable); a hosted PTY remains the v2 north star.)
-- **Claude Code status (hook bridge)** — an opt-in, **default-off** integration (Settings → "Claude Code status (beta)") that surfaces a *Done / Needs you* badge in the picker rows, the panel header, and a menu-bar dot, so you know when a session finished or is waiting — without parsing the mirror TUI. A POSIX shell hook merged into `~/.claude/settings.json` (backup + idempotent + one-click uninstall) pipes one JSON line per `Stop`/`Notification` event to an in-app **AF_UNIX socket** via `nc -U`; the hook is **non-blocking + fail-open** (always `exit 0`, never blocks Claude) and ships **no compiled binary**. Frames correlate to the exact iTerm pane via `ITERM_SESSION_ID` (its GUID *is* the session id) and are dropped if they don't match a known session (anti-spoof). Pure enrichment layered over the live mirror — reverse-engineered from Vibe Island, then scoped down via an adversarial design debate. (`Sources/SnippAIKit/Hooks/`, `Sources/SnippAI/Hooks/`; design: [`docs/hook-bridge-spec.md`](./docs/hook-bridge-spec.md))
-
-### Build & run the app
 ```bash
-./scripts/build_app.sh            # assembles + ad-hoc signs build/SnippAI.app
-open build/SnippAI.app            # menu-bar icon appears; press ⌥⇧4 to capture
-```
-First run prompts for **Screen Recording** (capture) and **Automation → iTerm2** (the tunnel). iTerm2's Python API must be enabled once: Settings → General → Magic → "Enable Python API".
-
-### Verifying without the GUI
-```bash
-swift run iterm-spike              # native enumerate/send/stream against live iTerm, ALL GREEN ~22ms
-swift test                         # unit + integration: RFC 6455 frames, terminal-screen parser,
-                                   # hook frame/correlation/installer, real AF_UNIX socket round-trips
+./scripts/build_app.sh             # release config: assembles + ad-hoc signs build/SnippAI.app
+./scripts/build_app.sh debug      # debug config: enables the SNIPPAI_* env hooks (UI screenshots, self-tests)
+open build/SnippAI.app             # menu-bar icon appears; press ⌥⇧4 to capture
+swift test                         # unit + integration: WS framing, screen parser, hooks (real AF_UNIX), licensing, semver
+swift run iterm-spike              # native enumerate/send/stream against a live iTerm — ALL GREEN ~22ms
 ```
 
-## Remaining / next steps
-- [x] Hotkey rebinding UI + onboarding for the two TCC grants.
-- [x] Terminal.app adapter (AppleScript) + multi-adapter router. _(Claude desktop app probed — not adaptable; see above.)_
-- [x] Claude Code status hook bridge (Stop/Notification → in-panel "Done / Needs you" badge). _(Deferred by the design debate: blocking in-panel approvals, statusline usage scrape, a VS Code/Cursor focus extension, and the SSH-remote tunnel — see [`docs/hook-bridge-spec.md`](./docs/hook-bridge-spec.md).)_
-- [ ] Picker live screen-preview thumbnails (current labels already disambiguate).
-- [ ] v2 "host model" (own the PTY) → enables the native-chat Flavor B.
-
----
+Debug-only env hooks (`SNIPPAI_FAKE_ENTITLEMENT`, `SNIPPAI_AUTO_PANEL`, …) are compiled out of release builds. Releasing (sign → notarize → staple → DMG → appcast) is `scripts/release.sh`; the runbook is [`docs/LAUNCH.md`](./docs/LAUNCH.md).
 
 ## Repo contents
+
 | Path | What |
 |---|---|
-| `README.md` | This document — current state, decisions, and verification. |
-| `Package.swift`, `Sources/` | The native app: `SnippAIKit` (engine — iTerm2 + Terminal.app adapters, router) + `SnippAI` (menu-bar app) + `iterm-spike` / `terminal-spike` (per-adapter spikes/diagnostics). |
-| `proto/api.proto` | Version-exact iTerm2 API schema, reconstructed offline from the installed `iterm2` lib by `tools/extract_proto.py`. |
-| `scripts/build_app.sh` | Assembles and ad-hoc-signs `SnippAI.app`. |
-| `tools/ax_probe.swift` | Accessibility probe used to reject the Claude-desktop adapter (`swift tools/ax_probe.swift`). Read-only — dumps the AX tree of the running Claude app. |
-| `spike_iterm.py` | The original Python de-risking spike (kept for reference). Safe — reads existing sessions; runs its send/stream test in a throwaway window it closes. |
+| `Sources/SnippAIKit/` | Engine: iTerm2 native client + protocol, Terminal.app adapter, adapter router, hook bridge, transcript tailer, licensing/version support |
+| `Sources/SnippAI/` | Menu-bar app: capture, panel + mirror UI, picker, onboarding, settings, licensing UI, updates, desktop inject |
+| `proto/api.proto` | Version-exact iTerm2 API schema (reconstructed by `tools/extract_proto.py`) |
+| `site/` | snippai.dev (static, Caddy on Railway) |
+| `marketing/` | Marketing plan, launch copy, demo assets |
+| `docs/` | Launch runbook, hook-bridge spec, feasibility notes, desktop-inject handoff |
+| `scripts/` | `build_app.sh` (dev), `release.sh` (sign/notarize/DMG/appcast) |
+| `tools/ax_probe.swift`, `spike_iterm.py` | The original de-risking probes (kept for reference) |

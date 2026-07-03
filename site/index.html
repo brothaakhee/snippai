@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>SnippAI — screenshot straight into Claude Code</title>
-<meta name="description" content="A native macOS app that fires a screenshot + your message straight into the Claude Code session you're already running — in your terminal or the Claude desktop app." />
+<meta name="description" content="A native macOS app that fires a screenshot + your message straight into the Claude Code session you're already running — in iTerm2, Terminal.app, or the Claude desktop app (beta)." />
 
 <!-- ───────────────────────────────────────────────────────────────────────
      Download links → https://github.com/brothaakhee/snippai-releases/releases/latest/download/SnippAI.dmg
@@ -101,6 +101,8 @@ kbd{font-family:var(--mono); font-size:12px; background:var(--surface); border:1
 .pill{font-family:var(--mono); font-size:12px; padding:6px 13px; border-radius:99px; border:1px solid var(--line2); background:var(--surface); color:var(--muted); display:inline-flex; align-items:center; gap:7px}
 .pill .d{width:6px;height:6px;border-radius:50%}
 .pill .d.m{background:var(--mint)} .pill .d.b{background:var(--blue)} .pill .d.v{background:var(--violet)}
+.pill .beta{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);border:1px solid var(--line2);border-radius:99px;padding:1px 6px;margin-left:2px}
+.reqnote{margin-top:10px;font-family:var(--mono);font-size:11.5px;color:var(--faint)}
 
 /* footer */
 footer{border-top:1px solid var(--line); padding:26px 0}
@@ -132,8 +134,9 @@ footer{border-top:1px solid var(--line); padding:26px 0}
     <span class="pwith">Works with</span>
     <span class="pill"><span class="d m"></span> iTerm2</span>
     <span class="pill"><span class="d b"></span> Terminal.app</span>
-    <span class="pill"><span class="d v"></span> Claude Desktop</span>
+    <span class="pill"><span class="d v"></span> Claude Desktop <span class="beta">beta</span></span>
   </div>
+  <p class="reqnote">Requires iTerm2 or Terminal.app — Warp, Ghostty &amp; other terminals aren’t supported yet.</p>
 
   <div class="capline"><kbd>⌥</kbd> <kbd>⇧</kbd> <kbd>4</kbd> <span>to capture</span></div>
 

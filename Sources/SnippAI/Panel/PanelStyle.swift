@@ -26,6 +26,7 @@ enum PanelStyle {
 
     /// Debug-only forced Dynamic Type size (SNIPPAI_TYPE_SIZE) for screenshots.
     static var debugTypeSize: DynamicTypeSize? {
+        #if DEBUG
         switch ProcessInfo.processInfo.environment["SNIPPAI_TYPE_SIZE"] {
         case "xSmall": return .xSmall
         case "small": return .small
@@ -37,6 +38,9 @@ enum PanelStyle {
         case "accessibility3", "a3": return .accessibility3
         default: return nil
         }
+        #else
+        return nil
+        #endif
     }
 }
 

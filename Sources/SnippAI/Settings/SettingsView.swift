@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Bindable var store: ShortcutStore
     @Bindable var hooks: HookController
     @Bindable var license: LicenseStore
+    @Bindable var launchAtLogin: LaunchAtLoginStore
     var onDone: () -> Void
 
     @Environment(\.openURL) private var openURL
@@ -31,6 +32,7 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .transition(.opacity)
                 }
+                launchAtLoginCard
                 claudeStatusCard
                 licenseCard
             }
@@ -39,6 +41,7 @@ struct SettingsView: View {
             footer
         }
         .snippaiWindowChrome()
+        .onAppear { launchAtLogin.refresh() }
         .onDisappear { recorder.stop() }
     }
 
@@ -83,6 +86,41 @@ struct SettingsView: View {
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: PanelStyle.cardRadius))
         .animation(.easeInOut(duration: 0.15), value: recorder.isRecording)
         .animation(.easeInOut(duration: 0.15), value: store.combo)
+    }
+
+    // MARK: Launch at login card
+
+    private var launchAtLoginCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: "power")
+                    .scaledFont(15).foregroundStyle(.secondary).frame(width: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Launch at login").scaledFont(13, weight: .semibold)
+                    Text("Start SnippAI automatically so \(store.combo.displayString) always works.")
+                        .scaledFont(11).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                Toggle("", isOn: Binding(
+                    get: { launchAtLogin.isEnabled },
+                    set: { launchAtLogin.setEnabled($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .accessibilityLabel("Launch at login")
+            }
+            if let status = launchAtLogin.statusMessage {
+                Label(status, systemImage: "exclamationmark.triangle.fill")
+                    .scaledFont(10)
+                    .foregroundStyle(Color.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
+            }
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: PanelStyle.cardRadius))
+        .animation(.easeInOut(duration: 0.15), value: launchAtLogin.isEnabled)
     }
 
     // MARK: Claude Code status card

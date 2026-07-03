@@ -11,8 +11,14 @@ struct WelcomeCarousel: View {
 
     private let pages: [Page]
 
-    // Debug: jump straight to a page for inspection/screenshots (SNIPPAI_WELCOME_PAGE).
-    @State private var index = Int(ProcessInfo.processInfo.environment["SNIPPAI_WELCOME_PAGE"] ?? "") ?? 0
+    // Debug builds: jump straight to a page for inspection/screenshots (SNIPPAI_WELCOME_PAGE).
+    @State private var index = {
+        #if DEBUG
+        Int(ProcessInfo.processInfo.environment["SNIPPAI_WELCOME_PAGE"] ?? "") ?? 0
+        #else
+        0
+        #endif
+    }()
 
     init(shortcutDisplay: String = "⌥⇧4", onGetStarted: @escaping () -> Void) {
         self.onGetStarted = onGetStarted
