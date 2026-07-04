@@ -9,6 +9,21 @@ public enum VersionConfig {
     // GitHub Release asset (stable "latest" URL); the download page is the site.
     public static let feedURL = URL(string: "https://github.com/brothaakhee/snippai-releases/releases/latest/download/appcast.json")!
     public static let downloadPageURL = URL(string: "https://snippai.dev")!
+
+    /// Only these hosts may be opened from the feed's download URL. The feed is fetched
+    /// over HTTPS from GitHub, but if it were ever substituted, opening an arbitrary URL
+    /// with `NSWorkspace.open` could launch a custom scheme handler — validate, don't trust.
+    static let allowedDownloadHosts: Set<String> = ["github.com", "www.github.com", "snippai.dev", "www.snippai.dev"]
+
+    /// The feed's download URL, but only if it's HTTPS to a host we ship from;
+    /// anything else falls back to the pinned download page.
+    public static func vettedDownloadURL(_ raw: String?) -> URL {
+        guard let raw, let url = URL(string: raw),
+              url.scheme?.lowercased() == "https",
+              let host = url.host?.lowercased(), allowedDownloadHosts.contains(host)
+        else { return downloadPageURL }
+        return url
+    }
 }
 
 /// Semantic-version comparison over dot-separated numeric components. Non-numeric

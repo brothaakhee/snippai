@@ -67,8 +67,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { await licenseStore.revalidateInBackground() }
 
         // Lightweight update check: show a menu item if a newer build is published.
+        // Re-checks periodically — a menu-bar app can stay up for weeks, so a
+        // launch-only check would never see releases published after launch.
         updateController.onChange = { [weak self] in self?.refreshUpdateMenuItem() }
-        updateController.checkInBackground()
+        updateController.startPeriodicChecks()
 
         #if DEBUG
         // Debug builds only: env-var hooks for self-tests and UI screenshots. Kept out
@@ -241,6 +243,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateItem.isHidden = true
         menu.addItem(updateItem)
         self.updateMenuItem = updateItem
+        let checkItem = NSMenuItem(title: "Check for Updates…", action: #selector(menuCheckForUpdates), keyEquivalent: "")
+        checkItem.target = self
+        menu.addItem(checkItem)
         let quitItem = NSMenuItem(title: "Quit SnippAI", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quitItem)
         item.menu = menu
@@ -260,6 +265,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func menuUpdate() { updateController.openDownload() }
+
+    /// Manual update check with explicit feedback — unlike the silent background
+    /// check, the user asked, so always answer (up to date / update found / failed).
+    @objc private func menuCheckForUpdates() {
+        Task {
+            await updateController.check()
+            let alert = NSAlert()
+            if let update = updateController.available {
+                alert.messageText = "SnippAI \(update.version) is available"
+                alert.informativeText = "You're running \(updateController.currentVersion). Download the update?"
+                alert.addButton(withTitle: "Download")
+                alert.addButton(withTitle: "Later")
+                if alert.runModal() == .alertFirstButtonReturn { updateController.openDownload() }
+            } else if updateController.lastCheckFailed {
+                alert.messageText = "Couldn't check for updates"
+                alert.informativeText = "SnippAI couldn't reach the update feed. Check your connection and try again."
+                alert.runModal()
+            } else {
+                alert.messageText = "You're up to date"
+                alert.informativeText = "SnippAI \(updateController.currentVersion) is the latest version."
+                alert.runModal()
+            }
+        }
+    }
 
     private var captureMenuTitle: String { "Capture & Send  (\(shortcutStore.combo.displayString))" }
 

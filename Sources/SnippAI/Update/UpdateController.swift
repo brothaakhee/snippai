@@ -19,6 +19,12 @@ final class UpdateController {
 
     let currentVersion: String
     private let checker = VersionChecker()
+    private var periodicTask: Task<Void, Never>?
+
+    /// How often the background re-check runs. A menu-bar app stays up for weeks, so a
+    /// launch-only check would leave long-running instances permanently unaware of
+    /// updates. Uses the continuous clock so machine sleep counts toward the interval.
+    static let recheckInterval: Duration = .seconds(6 * 3600)
 
     /// Called when `available` changes so AppKit can refresh the menu item.
     var onChange: (() -> Void)?
@@ -27,8 +33,15 @@ final class UpdateController {
         self.currentVersion = currentVersion
     }
 
-    func checkInBackground() {
-        Task { await check() }
+    /// Checks now, then keeps re-checking every `recheckInterval` for the app's lifetime.
+    func startPeriodicChecks() {
+        periodicTask?.cancel()
+        periodicTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.check()
+                try? await Task.sleep(for: Self.recheckInterval, clock: .continuous)
+            }
+        }
     }
 
     func check() async {
@@ -36,8 +49,7 @@ final class UpdateController {
             let feed = try await checker.fetchLatest()
             lastCheckFailed = false
             if SemVer.isNewer(feed.version, than: currentVersion) {
-                let url = feed.url.flatMap(URL.init(string:)) ?? VersionConfig.downloadPageURL
-                let update = Update(version: feed.version, url: url, notes: feed.notes)
+                let update = Update(version: feed.version, url: VersionConfig.vettedDownloadURL(feed.url), notes: feed.notes)
                 if update != available { available = update; onChange?() }
             } else if available != nil {
                 available = nil; onChange?()

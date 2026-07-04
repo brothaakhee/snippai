@@ -33,4 +33,32 @@ final class VersionCheckTests: XCTestCase {
         XCTAssertEqual(feed.url, "https://example.com/x.dmg")
         XCTAssertEqual(feed.notes, "Fixes")
     }
+
+    // MARK: - Download URL vetting
+
+    func testVettedURLAcceptsAllowedHostsOverHTTPS() {
+        let github = "https://github.com/brothaakhee/snippai-releases/releases/latest/download/SnippAI.dmg"
+        XCTAssertEqual(VersionConfig.vettedDownloadURL(github).absoluteString, github)
+        XCTAssertEqual(VersionConfig.vettedDownloadURL("https://snippai.dev/download"),
+                       URL(string: "https://snippai.dev/download"))
+        // Host matching is case-insensitive.
+        XCTAssertEqual(VersionConfig.vettedDownloadURL("https://GitHub.com/x"), URL(string: "https://GitHub.com/x"))
+    }
+
+    func testVettedURLRejectsWrongSchemeOrHost() {
+        // Non-HTTPS schemes must not be opened, even on an allowed-looking host.
+        XCTAssertEqual(VersionConfig.vettedDownloadURL("http://github.com/x"), VersionConfig.downloadPageURL)
+        XCTAssertEqual(VersionConfig.vettedDownloadURL("file:///etc/passwd"), VersionConfig.downloadPageURL)
+        XCTAssertEqual(VersionConfig.vettedDownloadURL("x-custom-scheme://payload"), VersionConfig.downloadPageURL)
+        // Unlisted hosts fall back — including lookalikes and subdomains.
+        XCTAssertEqual(VersionConfig.vettedDownloadURL("https://evil.example.com/SnippAI.dmg"), VersionConfig.downloadPageURL)
+        XCTAssertEqual(VersionConfig.vettedDownloadURL("https://github.com.evil.example/x"), VersionConfig.downloadPageURL)
+        XCTAssertEqual(VersionConfig.vettedDownloadURL("https://sub.github.com/x"), VersionConfig.downloadPageURL)
+    }
+
+    func testVettedURLFallsBackOnMissingOrUnparseable() {
+        XCTAssertEqual(VersionConfig.vettedDownloadURL(nil), VersionConfig.downloadPageURL)
+        XCTAssertEqual(VersionConfig.vettedDownloadURL(""), VersionConfig.downloadPageURL)
+        XCTAssertEqual(VersionConfig.vettedDownloadURL("not a url at all"), VersionConfig.downloadPageURL)
+    }
 }
