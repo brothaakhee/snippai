@@ -36,6 +36,12 @@ struct PanelView: View {
         VStack(spacing: 0) {
             TitleBar(model: model, opacity: opacityBinding, onClose: onClose, onAddScreenshot: onAddScreenshot)
             Divider().opacity(0.5)
+            if let version = model.updateBannerVersion {
+                UpdateBanner(version: version,
+                             onUpdate: { model.openUpdate?() },
+                             onDismiss: { model.dismissUpdateBanner() })
+                Divider().opacity(0.5)
+            }
             switch model.phase {
             case .picking:
                 SessionPickerView(model: model, onCancel: onClose)
@@ -61,6 +67,42 @@ struct PanelView: View {
         .tint(PanelStyle.accent)              // mint send button / selection / focus
         .environment(\.colorScheme, .dark)    // always dark, regardless of system appearance
         .snippaiDynamicTypeClamp()
+    }
+}
+
+/// A one-line, dismissible "new version" notice under the title bar — the panel is
+/// where the user's eyes already are, so updates shouldn't hide in the menu-bar menu
+/// alone. Dismissing silences this version's banner (persisted); the menu item stays.
+private struct UpdateBanner: View {
+    let version: String
+    var onUpdate: () -> Void
+    var onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.down.circle.fill")
+                .scaledFont(12)
+                .foregroundStyle(PanelStyle.accent)
+            Text("SnippAI \(version) is available")
+                .scaledFont(11.5, weight: .medium)
+                .foregroundStyle(.primary)
+            Spacer(minLength: 8)
+            Button("Update", action: onUpdate)
+                .buttonStyle(.plain)
+                .scaledFont(11.5, weight: .semibold)
+                .foregroundStyle(PanelStyle.accent)
+                .accessibilityLabel("Download SnippAI \(version)")
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .scaledFont(9, weight: .semibold)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss update notice")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+        .background(PanelStyle.accent.opacity(0.10))
     }
 }
 

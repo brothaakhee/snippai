@@ -66,10 +66,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // offline — the cached verdict + grace window keep licensed users working).
         Task { await licenseStore.revalidateInBackground() }
 
-        // Lightweight update check: show a menu item if a newer build is published.
-        // Re-checks periodically — a menu-bar app can stay up for weeks, so a
-        // launch-only check would never see releases published after launch.
-        updateController.onChange = { [weak self] in self?.refreshUpdateMenuItem() }
+        // Lightweight update check: surfaces as a menu-bar item AND a dismissible
+        // panel banner. Re-checks periodically — a menu-bar app can stay up for
+        // weeks, so a launch-only check would never see releases published after launch.
+        model.openUpdate = { [weak self] in self?.updateController.openDownload() }
+        updateController.onChange = { [weak self] in
+            self?.refreshUpdateMenuItem()
+            self?.model.availableUpdateVersion = self?.updateController.available?.version
+        }
         updateController.startPeriodicChecks()
 
         #if DEBUG

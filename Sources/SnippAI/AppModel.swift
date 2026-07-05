@@ -15,6 +15,32 @@ final class AppModel {
 
     var phase: Phase = .picking
     var sessions: [TerminalSession] = []
+
+    // MARK: - Update banner (fed by UpdateController via AppDelegate)
+
+    /// The newer version the update check found, if any. Set by AppDelegate whenever
+    /// the check result changes; the panel shows a dismissible banner for it.
+    var availableUpdateVersion: String?
+    /// Opens the update download — wired by AppDelegate to UpdateController.
+    var openUpdate: (() -> Void)?
+    /// The version whose banner the user dismissed. Persisted so dismissing 1.0.5's
+    /// banner silences 1.0.5 across launches but a later 1.0.6 shows again. The
+    /// menu-bar "Update to…" item remains available either way. Kept as stored
+    /// (observable) state — the UserDefaults write is only persistence.
+    private static let dismissedUpdateVersionKey = "update.dismissedBannerVersion"
+    private var dismissedUpdateVersion: String?
+
+    /// The version the banner should advertise, or nil when there's nothing to show
+    /// (no update, or this version's banner was dismissed).
+    var updateBannerVersion: String? {
+        guard let v = availableUpdateVersion, v != dismissedUpdateVersion else { return nil }
+        return v
+    }
+
+    func dismissUpdateBanner() {
+        dismissedUpdateVersion = availableUpdateVersion
+        UserDefaults.standard.set(availableUpdateVersion, forKey: Self.dismissedUpdateVersionKey)
+    }
     var selectedSessionID: String?
     var pickerQuery: String = ""
     /// Bumped each time the picker is (re)presented so the search field re-grabs focus.
@@ -77,6 +103,7 @@ final class AppModel {
             ClaudeDesktopAdapter(inject: DesktopInjector.make()),
         ])
         lastUsedSessionID = UserDefaults.standard.string(forKey: Self.lastSessionKey)
+        dismissedUpdateVersion = UserDefaults.standard.string(forKey: Self.dismissedUpdateVersionKey)
     }
 
     var selectedSession: TerminalSession? {
