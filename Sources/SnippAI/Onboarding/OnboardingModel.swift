@@ -17,7 +17,13 @@ final class OnboardingModel {
     var busyAction: String?
     /// Stray SnippAI bundles besides the running one — a permission granted to one of
     /// these wouldn't apply to the app the user is actually running.
-    var duplicateCopies: [URL] = []
+    var duplicateCopies: [InstallGuard.StrayCopy] = []
+    /// Outcome of the last removal attempt (nil = nothing to report).
+    var duplicateStatus: String?
+    /// True once the user tried granting Screen Recording this session — used to
+    /// escalate the stale-grant repair from a footnote link to a real button when
+    /// the grant visibly didn't take.
+    var screenRecordingGrantAttempted = false
 
     /// Whether Screen Recording is granted but the app must relaunch to use it.
     var needsRelaunch: Bool { snapshot.screenRecording == .needsRelaunch }
@@ -31,13 +37,16 @@ final class OnboardingModel {
         snapshot = PermissionsService.snapshot()
         // Don't keep showing a stale error once access is actually granted.
         if snapshot.iTermAutomation == .granted { automationError = nil }
+        // While the stray-copies banner is showing, re-scan on each refresh: the set
+        // changes outside the app too (the user ejects the installer DMG or deletes a
+        // copy in Finder), and a stale banner reads as "the button did nothing". With
+        // no banner up there's nothing to live-update, so skip the LaunchServices query.
+        if !duplicateCopies.isEmpty { refreshDuplicates() }
     }
 
-    /// Re-scans for stray copies. Kept out of `refresh()` (which runs on every window
-    /// activation and after each grant) because the copy set only changes when we
-    /// remove one — a LaunchServices query on every activation would be wasted work.
     private func refreshDuplicates() {
         duplicateCopies = InstallGuard.otherCopies()
+        if duplicateCopies.isEmpty { duplicateStatus = nil }
     }
 
     func grantScreenRecording() {
@@ -45,6 +54,7 @@ final class OnboardingModel {
         // denied" case where the prompt no longer appears). The next snapshot
         // derives .granted / .needsRelaunch / .notDetermined from real preflight
         // state — no manual latch that could lie after a denial.
+        screenRecordingGrantAttempted = true
         PermissionsService.requestScreenRecording()
         PermissionsService.openScreenRecordingSettings()
         refresh()
@@ -75,15 +85,21 @@ final class OnboardingModel {
 
     func revealDuplicates() {
         guard !duplicateCopies.isEmpty else { return }
-        NSWorkspace.shared.activateFileViewerSelecting(duplicateCopies)
+        NSWorkspace.shared.activateFileViewerSelecting(duplicateCopies.map(\.url))
     }
 
     func removeDuplicates() {
-        InstallGuard.removeCopies(duplicateCopies)
-        // Reflect immediately; LaunchServices may lag, so clear optimistically and
-        // re-scan once it's caught up.
-        duplicateCopies = []
-        Task { try? await Task.sleep(nanoseconds: 600_000_000); refreshDuplicates() }
+        guard busyAction == nil else { return }
+        busyAction = "duplicates"
+        duplicateStatus = nil
+        Task {
+            let problem = await InstallGuard.removeCopies(duplicateCopies)
+            busyAction = nil
+            refreshDuplicates()
+            // On success the banner disappears — that's the feedback. A failure keeps
+            // the banner up, so say why (a silent no-op reads as a broken button).
+            duplicateStatus = problem
+        }
     }
 
     func launchITerm() {

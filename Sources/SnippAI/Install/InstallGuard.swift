@@ -95,9 +95,17 @@ enum InstallGuard {
 
     // MARK: - Duplicate copies
 
-    /// Other registered SnippAI bundles besides the running one (and any transient
-    /// translocated path). Used to warn when permission was granted to a stray copy.
-    static func otherCopies() -> [URL] {
+    /// A stray SnippAI bundle and how it can be removed. A copy on a read-only volume
+    /// (the mounted installer disk image) can't be trashed — its volume must be ejected.
+    struct StrayCopy: Equatable {
+        let url: URL
+        let needsEject: Bool
+    }
+
+    /// Other registered SnippAI bundles besides the running one. Filters LaunchServices'
+    /// stale registrations (paths that no longer exist) and transient translocated paths.
+    /// Used to warn when permission was granted to a stray copy.
+    static func otherCopies() -> [StrayCopy] {
         let running = Bundle.main.bundleURL.resolvingSymlinksInPath().standardizedFileURL
         let all = NSWorkspace.shared.urlsForApplications(withBundleIdentifier: PermissionsService.bundleID)
         var seen = Set<String>()
@@ -107,14 +115,53 @@ enum InstallGuard {
                 let path = url.path
                 if path == running.path { return false }
                 if path.contains("/AppTranslocation/") { return false }
+                // LaunchServices can keep registrations for deleted bundles — a copy
+                // that isn't on disk can't hold a permission and can't be removed.
+                if !FileManager.default.fileExists(atPath: path) { return false }
                 return seen.insert(path).inserted
             }
+            .map { StrayCopy(url: $0, needsEject: isOnReadOnlyVolume($0)) }
     }
 
-    /// Moves the given copies to the Trash (reversible). Best-effort.
-    static func removeCopies(_ urls: [URL]) {
-        guard !urls.isEmpty else { return }
-        NSWorkspace.shared.recycle(urls, completionHandler: nil)
+    /// Removes the given copies: ejects the volume for disk-image copies, trashes the
+    /// rest (reversible). Returns a user-facing problem description, or nil when every
+    /// copy was handled.
+    static func removeCopies(_ copies: [StrayCopy]) async -> String? {
+        var failures: [String] = []
+        for copy in copies {
+            // Decide eject-vs-trash from LIVE volume state, not the scan-time snapshot
+            // (`needsEject` drives the button label; the volume can change in between).
+            if isOnReadOnlyVolume(copy.url) {
+                do {
+                    let volume = try copy.url.resourceValues(forKeys: [.volumeURLKey]).volume ?? copy.url
+                    try NSWorkspace.shared.unmountAndEjectDevice(at: volume)
+                } catch {
+                    failures.append("Couldn’t eject “\(copy.url.deletingLastPathComponent().lastPathComponent)” — eject it in Finder.")
+                }
+            } else {
+                do {
+                    try await recycle(copy.url)
+                } catch {
+                    failures.append("Couldn’t remove \(copy.url.path) — delete it in Finder.")
+                }
+            }
+        }
+        return failures.isEmpty ? nil : failures.joined(separator: " ")
+    }
+
+    /// Whether the bundle sits on a read-only volume (i.e. a mounted disk image).
+    private static func isOnReadOnlyVolume(_ url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.volumeIsReadOnlyKey]).volumeIsReadOnly) ?? false
+    }
+
+    /// `NSWorkspace.recycle` as async-throws, so callers can rescan after it finishes
+    /// instead of guessing with a delay.
+    private static func recycle(_ url: URL) async throws {
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            NSWorkspace.shared.recycle([url]) { _, error in
+                if let error { cont.resume(throwing: error) } else { cont.resume() }
+            }
+        }
     }
 
     // MARK: - Helpers

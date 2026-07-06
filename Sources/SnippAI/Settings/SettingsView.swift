@@ -111,11 +111,7 @@ struct SettingsView: View {
                 .accessibilityLabel("Launch at login")
             }
             if let status = launchAtLogin.statusMessage {
-                Label(status, systemImage: "exclamationmark.triangle.fill")
-                    .scaledFont(10)
-                    .foregroundStyle(Color.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .transition(.opacity)
+                StatusLabel(text: status)
             }
         }
         .padding(12)
@@ -156,11 +152,7 @@ struct SettingsView: View {
                 .scaledFont(10).foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
             if let status = hooks.statusMessage {
-                Label(status, systemImage: hooks.statusIsWarning ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                    .scaledFont(10)
-                    .foregroundStyle(hooks.statusIsWarning ? Color.orange : .green)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .transition(.opacity)
+                StatusLabel(text: status, isWarning: hooks.statusIsWarning)
             }
         }
         .padding(12)
@@ -208,11 +200,7 @@ struct SettingsView: View {
                 }
             }
             if let licenseMessage {
-                Label(licenseMessage.text, systemImage: licenseMessage.isWarning ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                    .scaledFont(10)
-                    .foregroundStyle(licenseMessage.isWarning ? Color.orange : .green)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .transition(.opacity)
+                StatusLabel(text: licenseMessage.text, isWarning: licenseMessage.isWarning)
             }
         }
         .padding(12)

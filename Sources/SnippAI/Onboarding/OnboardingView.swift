@@ -73,6 +73,9 @@ struct OnboardingView: View {
         // when "shows on in Settings but the app is denied" can happen (after a re-sign).
         let showRepair = model.snapshot.screenRecording == .notDetermined
                       || model.snapshot.screenRecording == .denied
+        // Once the user has tried Grant and the state visibly didn't move, the repair
+        // is the likely cure — promote it from a footnote link to a real button.
+        let escalate = showRepair && model.screenRecordingGrantAttempted
         var repair: (() -> Void)?
         if showRepair { repair = model.repairScreenRecording }
         return PermissionRow(
@@ -84,8 +87,12 @@ struct OnboardingView: View {
             state: model.snapshot.screenRecording,
             actionTitle: model.needsRelaunch ? "Relaunch" : "Grant…",
             action: { model.needsRelaunch ? model.relaunch() : model.grantScreenRecording() },
-            secondaryTitle: showRepair ? "Shows as allowed in Settings but still blocked? Reset & relaunch." : nil,
-            secondaryAction: repair
+            secondaryTitle: showRepair
+                ? (escalate ? "Still blocked after granting? Reset & Relaunch"
+                            : "Shows as allowed in Settings but still blocked? Reset & relaunch.")
+                : nil,
+            secondaryAction: repair,
+            secondaryProminent: escalate
         )
     }
 
@@ -100,14 +107,22 @@ struct OnboardingView: View {
         )
     }
 
+    @ViewBuilder
     private var duplicateBanner: some View {
+        // A copy on the mounted installer disk image can only be ejected, not trashed —
+        // say so, instead of a "Remove" that silently can't work.
+        let allOnDiskImage = model.duplicateCopies.allSatisfy(\.needsEject)
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .scaledFont(15).foregroundStyle(.orange).frame(width: 22)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Multiple copies of SnippAI found").scaledFont(13, weight: .semibold)
-                    Text("Keep only the one in Applications — granting permission to a stray copy won't apply here.")
+                    Text(allOnDiskImage ? "The SnippAI installer is still open"
+                                        : "Multiple copies of SnippAI found")
+                        .scaledFont(13, weight: .semibold)
+                    Text(allOnDiskImage
+                         ? "Eject the downloaded disk image — granting permission to the copy on it won't apply here."
+                         : "Keep only the one in Applications — granting permission to a stray copy won't apply here.")
                         .scaledFont(11).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -117,8 +132,15 @@ struct OnboardingView: View {
                 Spacer()
                 Button("Reveal in Finder", action: model.revealDuplicates)
                     .controlSize(.small)
-                Button("Remove extras", action: model.removeDuplicates)
-                    .controlSize(.small)
+                Button(action: model.removeDuplicates) {
+                    if model.busyAction == "duplicates" { ProgressView().controlSize(.small) }
+                    else { Text(allOnDiskImage ? "Eject Disk Image" : "Remove extras") }
+                }
+                .controlSize(.small)
+                .disabled(model.busyAction != nil)
+            }
+            if let status = model.duplicateStatus {
+                StatusLabel(text: status)
             }
         }
         .padding(12)
@@ -202,6 +224,9 @@ private struct PermissionRow: View {
     /// Optional tertiary "link" shown beneath the row (e.g. a repair affordance).
     var secondaryTitle: String?
     var secondaryAction: (() -> Void)?
+    /// Renders the secondary as a real bordered button instead of link text — used
+    /// when it has become the likely fix and must not be overlooked.
+    var secondaryProminent = false
     @ScaledMetric(relativeTo: .body) private var iconWidth: CGFloat = 22
 
     /// What to show as the row's secondary line: the "do X first" reason when the
@@ -215,14 +240,21 @@ private struct PermissionRow: View {
                 content.opacity(enabled ? 1 : 0.6)
             }
             if let secondaryTitle, let secondaryAction {
-                Button(action: secondaryAction) {
-                    Text(secondaryTitle)
-                        .scaledFont(10)
-                        .foregroundStyle(Color.accentColor)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
+                Group {
+                    if secondaryProminent {
+                        Button(secondaryTitle, action: secondaryAction)
+                            .controlSize(.small)
+                    } else {
+                        Button(action: secondaryAction) {
+                            Text(secondaryTitle)
+                                .scaledFont(10)
+                                .foregroundStyle(Color.accentColor)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                .buttonStyle(.plain)
                 .padding(.leading, iconWidth + 12)   // align under the title text
             }
         }

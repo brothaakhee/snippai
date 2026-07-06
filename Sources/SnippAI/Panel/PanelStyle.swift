@@ -44,6 +44,22 @@ enum PanelStyle {
     }
 }
 
+/// The house style for a transient status/outcome line under a control: a small
+/// warning-orange (or success-green) label that wraps and fades in. Used by the
+/// Settings cards and the onboarding banner — one place to restyle them all.
+struct StatusLabel: View {
+    let text: String
+    var isWarning = true
+
+    var body: some View {
+        Label(text, systemImage: isWarning ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+            .scaledFont(10)
+            .foregroundStyle(isWarning ? Color.orange : .green)
+            .fixedSize(horizontal: false, vertical: true)
+            .transition(.opacity)
+    }
+}
+
 extension View {
     /// Clamps Dynamic Type to the band the compact UI supports (and applies the
     /// debug override when set).
