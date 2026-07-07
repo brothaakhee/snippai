@@ -434,6 +434,14 @@ final class AppModel {
             return false
         }
         if current.looksLikeAgent { return true }
+        // The job name only reflects the pane's FOREGROUND process — an agent that's
+        // busy running a compiler/LSP/test child reads as that child (e.g. Claude
+        // building Swift shows "sourcekit-lsp"). Before warning, ask the ground
+        // truth: is an agent CLI alive on this pane's tty?
+        let tty = current.tty
+        if !tty.isEmpty, await Task.detached(operation: { AgentProbe.agentAlive(onTTY: tty) }).value {
+            return true
+        }
 
         let alert = NSAlert()
         alert.alertStyle = .warning

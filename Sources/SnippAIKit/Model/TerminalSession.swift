@@ -51,11 +51,18 @@ public struct TerminalSession: Identifiable, Equatable, Sendable {
         [folderName, jobName, title, cwd, lastLine, source, tty].joined(separator: " ").lowercased()
     }
 
+    /// The interactive AI/agent CLIs SnippAI targets — shared by the job-name
+    /// heuristic below and `AgentProbe`'s process-tree check.
+    public static let agentCLINames: Set<String> = ["claude", "codex", "aider", "cursor", "goose", "ollama"]
+
     /// True when the running job looks like an interactive AI/agent CLI — these
-    /// are the sessions SnippAI most wants to target.
+    /// are the sessions SnippAI most wants to target. NOTE: the job name reflects
+    /// the pane's *foreground* process, so an agent that foregrounded a child
+    /// (compiler, LSP) reads false here — use `AgentProbe.agentAlive(onTTY:)` when
+    /// the answer matters (e.g. gating a send).
     public var looksLikeAgent: Bool {
         let job = jobName.lowercased()
-        return ["claude", "codex", "aider", "cursor", "goose", "ollama"].contains { job.contains($0) }
+        return Self.agentCLINames.contains { job.contains($0) }
     }
 
     /// Window/tab/pane position for a hover tooltip. Empty when there's no meaningful
