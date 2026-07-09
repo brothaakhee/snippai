@@ -34,5 +34,7 @@
     <string>SnippAI connects to your iTerm2 session to send screenshots and messages to Claude.</string>
     <key>NSScreenCaptureUsageDescription</key>
     <string>SnippAI captures the region you select so you can send it to Claude.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>SnippAI listens only while the panel shows “Listening” — your speech becomes the message text. Transcription runs entirely on this Mac; audio never leaves it.</string>
 </dict>
 </plist>

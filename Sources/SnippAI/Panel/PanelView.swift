@@ -5,6 +5,7 @@ import SnippAIKit
 /// or the compose view (live mirror + message input).
 struct PanelView: View {
     @Bindable var model: AppModel
+    let voice: VoiceController
     var onClose: () -> Void
     var onAddScreenshot: () -> Void = {}
     /// Called as the user drags the opacity slider, so the controller can fade the
@@ -16,11 +17,13 @@ struct PanelView: View {
     @State private var opacity: Double
 
     init(model: AppModel,
+         voice: VoiceController,
          onClose: @escaping () -> Void,
          onAddScreenshot: @escaping () -> Void = {},
          initialOpacity: Double = 1.0,
          onOpacityChange: @escaping (Double) -> Void = { _ in }) {
         self._model = Bindable(wrappedValue: model)
+        self.voice = voice
         self.onClose = onClose
         self.onAddScreenshot = onAddScreenshot
         self.onOpacityChange = onOpacityChange
@@ -46,7 +49,7 @@ struct PanelView: View {
             case .picking:
                 SessionPickerView(model: model, onCancel: onClose)
             case .composing:
-                ComposeView(model: model)
+                ComposeView(model: model, voice: voice)
             }
         }
         // Fill the (resizable) window rather than a fixed size, so dragging the
@@ -375,6 +378,7 @@ private struct SourceBadge: View {
 
 private struct ComposeView: View {
     @Bindable var model: AppModel
+    @Bindable var voice: VoiceController
     @State private var inputFocused = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Scale the input box + send button with Dynamic Type so larger text doesn't crowd.
@@ -403,6 +407,10 @@ private struct ComposeView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) { Divider().opacity(0.4); inputBar }
         }
+        // Voice-first: start listening the moment the compose view appears (no-op
+        // unless voice is enabled and ready). Leaving compose discards the audio.
+        .onAppear { Task { await voice.beginRecording() } }
+        .onDisappear { voice.cancelRecording() }
     }
 
     @ViewBuilder private var mirror: some View {
@@ -499,6 +507,10 @@ private struct ComposeView: View {
                     .font(.caption).foregroundStyle(.orange)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            if let note = voice.statusMessage {
+                StatusLabel(text: note)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             HStack(alignment: .bottom, spacing: 8) {
                 ZStack(alignment: .topLeading) {
                     if model.messageText.isEmpty {
@@ -508,7 +520,7 @@ private struct ComposeView: View {
                             .padding(.horizontal, 6).padding(.vertical, 8)
                             .allowsHitTesting(false)
                     }
-                    MessageInput(text: $model.messageText, onSubmit: send,
+                    MessageInput(text: $model.messageText, onSubmit: handleSubmit,
                                  onCancel: { model.backToPicker() },
                                  onFocusChange: { focused in
                                      withAnimation(.easeInOut(duration: 0.15)) { inputFocused = focused }
@@ -519,7 +531,14 @@ private struct ComposeView: View {
                         // Only treat genuine user typing (non-empty) as dismissing
                         // the badge — not the programmatic clear that send() performs.
                         .onChange(of: model.messageText) {
-                            if !model.messageText.isEmpty { model.clearSentBadge() }
+                            if !model.messageText.isEmpty {
+                                model.clearSentBadge()
+                                // Typing is the deliberate text fallback — stop
+                                // listening and discard the audio. (Transcription
+                                // fills the field while NOT recording, so it
+                                // doesn't cancel itself.)
+                                voice.cancelRecording()
+                            }
                         }
                 }
                 .padding(4)
@@ -530,7 +549,10 @@ private struct ComposeView: View {
                         .strokeBorder(PanelStyle.accent.opacity(inputFocused ? 0.55 : 0), lineWidth: 1.5)
                 )
 
-                Button(action: send) {
+                MicButton(voice: voice, size: sendSize, rowHeight: inputMinHeight + 8,
+                          onStopAndReview: stopAndReview)
+
+                Button(action: handleSubmit) {
                     Group {
                         if model.isSending {
                             ProgressView().controlSize(.small)
@@ -562,9 +584,27 @@ private struct ComposeView: View {
         .padding(.horizontal, PanelStyle.contentInset).padding(.top, PanelStyle.rowPadV).padding(.bottom, 12)
     }
 
+    /// Stop listening → transcript lands in the field for review; Enter then sends.
+    private func stopAndReview() {
+        Task {
+            if let text = await voice.finishAndTranscribe() {
+                model.appendToMessage(text)
+            }
+        }
+    }
+
     @ViewBuilder
     private var footer: some View {
-        if model.selectedSession?.supportsInject == false {
+        if voice.phase == .recording {
+            Label("Listening… Return to stop & review — typing switches to text", systemImage: "waveform")
+                .scaledFont(10).foregroundStyle(PanelStyle.accent)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityAddTraits(.updatesFrequently)
+        } else if voice.phase == .transcribing {
+            Label("Transcribing…", systemImage: "waveform")
+                .scaledFont(10).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else if model.selectedSession?.supportsInject == false {
             Label("Mirror only — type in the Claude app to reply", systemImage: "eye")
                 .scaledFont(10).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -584,12 +624,76 @@ private struct ComposeView: View {
 
     private var canSend: Bool {
         !model.isSending
+            && voice.phase != .transcribing                     // don't send while the transcript is landing
             && model.selectedSession?.supportsInject != false   // mirror-only targets can't receive input
             && (!model.messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !model.screenshotURLs.isEmpty)
+    }
+
+    /// Return / send-button: while listening, the first press stops and fills the
+    /// field for review; while transcribing it waits (a fast double-Return must not
+    /// send *without* the transcript and orphan it in the next draft); otherwise it
+    /// sends as always.
+    private func handleSubmit() {
+        switch voice.phase {
+        case .recording:    stopAndReview()
+        case .transcribing: break   // ~200ms; the transcript is about to appear
+        default:            send()
+        }
     }
 
     private func send() {
         guard canSend else { return }
         Task { await model.send() }
+    }
+}
+
+/// The mic control: idle → start listening; listening → stop & review (pulsing
+/// with the live input level); transcribing → spinner. Hidden while voice is off
+/// or setting up. A standalone view so the ~10 Hz `voice.level` updates re-render
+/// only this button — not the whole compose body (mirror included).
+private struct MicButton: View {
+    @Bindable var voice: VoiceController
+    let size: CGFloat
+    let rowHeight: CGFloat
+    var onStopAndReview: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let isRecording = voice.phase == .recording
+        switch voice.phase {
+        case .ready, .recording, .transcribing:
+            Button(action: toggle) {
+                Group {
+                    if voice.phase == .transcribing {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: isRecording ? "mic.fill" : "mic")
+                            .scaledFont(14, weight: .semibold)
+                    }
+                }
+                .frame(width: size, height: size)
+                .background(
+                    isRecording
+                        ? PanelStyle.accent.opacity(0.25 + 0.5 * Double(voice.level))
+                        : Color.primary.opacity(0.12),
+                    in: Circle())
+                .foregroundStyle(isRecording ? PanelStyle.accent : .secondary)
+                .frame(height: rowHeight)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: voice.level)
+            }
+            .buttonStyle(.plain)
+            .help(isRecording ? "Stop & review (Return)" : "Speak your message")
+            .accessibilityLabel(isRecording ? "Stop listening" : "Start voice input")
+        default:
+            EmptyView()
+        }
+    }
+
+    private func toggle() {
+        switch voice.phase {
+        case .ready:     Task { await voice.beginRecording() }
+        case .recording: onStopAndReview()
+        default:         break
+        }
     }
 }

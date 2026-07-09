@@ -15,6 +15,7 @@ let package = Package(
             name: "SnippAIKit",
             dependencies: [
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+                .product(name: "FluidAudio", package: "FluidAudio"),
             ]
         ),
         // De-risking spike + diagnostics CLI: enumerate / send / stream via the native client.

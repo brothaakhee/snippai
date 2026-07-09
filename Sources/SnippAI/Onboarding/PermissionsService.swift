@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import CoreGraphics
 import SnippAIKit
 
@@ -120,6 +121,20 @@ enum PermissionsService {
 
     static func openAutomationSettings() {
         open("x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")
+    }
+
+    // MARK: - Microphone (voice input)
+
+    /// Prompts for microphone access if undecided. Returns whether we may record.
+    /// Lives here — not in the recorder — so every TCC permission has one home.
+    /// (Not part of `PermissionsSnapshot`/onboarding: voice is an opt-in feature,
+    /// requested contextually at first record, not core setup.)
+    static func requestMicrophone() async -> Bool {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: return true
+        case .notDetermined: return await AVCaptureDevice.requestAccess(for: .audio)
+        default: return false
+        }
     }
 
     // MARK: - Accessibility (for desktop-app inject via synthetic keystrokes)

@@ -8,6 +8,7 @@ struct SettingsView: View {
     @Bindable var hooks: HookController
     @Bindable var license: LicenseStore
     @Bindable var launchAtLogin: LaunchAtLoginStore
+    @Bindable var voice: VoiceController
     var onDone: () -> Void
 
     @Environment(\.openURL) private var openURL
@@ -33,6 +34,7 @@ struct SettingsView: View {
                         .transition(.opacity)
                 }
                 launchAtLoginCard
+                voiceCard
                 claudeStatusCard
                 licenseCard
             }
@@ -117,6 +119,62 @@ struct SettingsView: View {
         .padding(12)
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: PanelStyle.cardRadius))
         .animation(.easeInOut(duration: 0.15), value: launchAtLogin.isEnabled)
+    }
+
+    // MARK: Voice input card
+
+    private var voiceCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: "mic")
+                    .scaledFont(15).foregroundStyle(.secondary).frame(width: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("Voice input").scaledFont(13, weight: .semibold)
+                        Text("beta")
+                            .scaledFont(9, weight: .bold)
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(Color.secondary.opacity(0.2), in: Capsule())
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("Speak your message — the panel listens when it opens. Return stops to review; typing switches to text.")
+                        .scaledFont(11).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                Toggle("", isOn: Binding(
+                    get: { voice.isEnabled },
+                    set: { voice.setEnabled($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .accessibilityLabel("Enable voice input")
+            }
+            Text("Downloads a ~600 MB speech model once. Transcription runs entirely on this Mac — audio never leaves it.")
+                .scaledFont(10).foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            switch voice.phase {
+            case .downloading(let fraction):
+                HStack(spacing: 8) {
+                    ProgressView(value: fraction)
+                    Text("\(Int(fraction * 100))%").scaledFont(10).foregroundStyle(.secondary).monospacedDigit()
+                }
+            case .preparing:
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Preparing the model — the first time takes a minute or two.")
+                        .scaledFont(10).foregroundStyle(.secondary)
+                }
+            default:
+                EmptyView()
+            }
+            if let status = voice.statusMessage {
+                StatusLabel(text: status)
+            }
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: PanelStyle.cardRadius))
+        .animation(.easeInOut(duration: 0.15), value: voice.phase)
     }
 
     // MARK: Claude Code status card

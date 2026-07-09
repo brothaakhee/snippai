@@ -384,6 +384,17 @@ final class AppModel {
         screenshotURLs.removeAll { $0 == url }
     }
 
+    /// Appends text into the draft (voice transcript, future paste/drop sources) —
+    /// the single mutation surface for the message, with separator smarts so a
+    /// transcript never lands as "foo  bar" after trailing whitespace.
+    func appendToMessage(_ text: String) {
+        if messageText.isEmpty || messageText.hasSuffix(" ") || messageText.hasSuffix("\n") {
+            messageText += text
+        } else {
+            messageText += " " + text
+        }
+    }
+
     /// Composes the outgoing message (user text + screenshot paths) and submits it.
     func send() async {
         guard let sessionID = selectedSessionID else { return }

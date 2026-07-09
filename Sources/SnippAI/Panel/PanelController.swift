@@ -12,6 +12,7 @@ final class KeyablePanel: NSPanel {
 final class PanelController: NSObject, NSWindowDelegate {
     private var panel: KeyablePanel?
     private let model: AppModel
+    private let voice: VoiceController
     private var onClose: () -> Void = {}
     /// Invoked by the panel's "+" button to capture and append another screenshot.
     var onAddScreenshot: () -> Void = {}
@@ -29,8 +30,9 @@ final class PanelController: NSObject, NSWindowDelegate {
     /// grabbable. (alphaValue doesn't affect hit-testing, so it stays clickable too.)
     private static let minOpacity = 0.2
 
-    init(model: AppModel) {
+    init(model: AppModel, voice: VoiceController) {
         self.model = model
+        self.voice = voice
         super.init()
     }
 
@@ -92,19 +94,27 @@ final class PanelController: NSObject, NSWindowDelegate {
         applyOpacity()
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        // Voice-first on REOPEN too: the hosting view stays mounted across
+        // hide/show, so ComposeView.onAppear never re-fires — without this, auto-
+        // listen would work only on the panel's very first open. Idempotent: it's
+        // a no-op unless voice is idle-ready and we're composing.
+        if model.phase == .composing {
+            Task { await voice.beginRecording() }
+        }
     }
 
     func hide() {
         panel?.orderOut(nil)
         // Stop the live mirror streams — a hidden panel must not keep fetching and
         // rendering screen buffers in the background. `beginSession` restarts them
-        // on the next open.
+        // on the next open. Likewise the mic: a hidden panel must never listen.
         model.teardown()
+        voice.cancelRecording()
     }
 
     private func existingOrNewPanel() -> KeyablePanel {
         if let panel { return panel }
-        let hosting = NSHostingView(rootView: PanelView(model: model, onClose: { [weak self] in
+        let hosting = NSHostingView(rootView: PanelView(model: model, voice: voice, onClose: { [weak self] in
             self?.hide()
             self?.onClose()
         }, onAddScreenshot: { [weak self] in

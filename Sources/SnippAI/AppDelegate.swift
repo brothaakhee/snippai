@@ -4,7 +4,8 @@ import SnippAIKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let model = AppModel()
-    private lazy var panelController = PanelController(model: model)
+    private let voiceController = VoiceController()
+    private lazy var panelController = PanelController(model: model, voice: voiceController)
     private let captureController = CaptureController()
     private let onboarding = OnboardingController()
     private let shortcutStore = ShortcutStore()
@@ -13,7 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let updateController = UpdateController()
     private lazy var paywallController = PaywallController()
     private lazy var hookController = HookController(model: model)
-    private lazy var settings = SettingsController(store: shortcutStore, hooks: hookController, license: licenseStore, launchAtLogin: launchAtLoginStore)
+    private lazy var settings = SettingsController(store: shortcutStore, hooks: hookController, license: licenseStore, launchAtLogin: launchAtLoginStore, voice: voiceController)
     private var statusItem: NSStatusItem?
     private var captureMenuItem: NSMenuItem?
     private var updateMenuItem: NSMenuItem?
