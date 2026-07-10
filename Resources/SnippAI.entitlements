@@ -8,5 +8,10 @@
          runtime via TCC and need no entitlement. -->
     <key>com.apple.security.automation.apple-events</key>
     <true/>
+    <!-- Voice input: under the hardened runtime, mic access is DENIED silently
+         (no prompt, no TCC entry) without this — the runtime TCC prompt alone
+         is not enough. -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
 </dict>
 </plist>
