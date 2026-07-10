@@ -67,6 +67,8 @@ a{color:inherit;text-decoration:none}
 .kick .dot{width:7px;height:7px;border-radius:50%;background:var(--mint);box-shadow:0 0 0 0 rgba(19,160,102,.4);animation:pulse 2.6s infinite}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(19,160,102,.4)}70%{box-shadow:0 0 0 8px rgba(19,160,102,0)}100%{box-shadow:0 0 0 0 rgba(19,160,102,0)}}
 h1{font-family:var(--display); font-weight:800; font-size:clamp(26px,4.6vw,44px); line-height:1.0; letter-spacing:-.02em; text-transform:uppercase; max-width:18ch; overflow-wrap:break-word}
+/* the voice word — mint, matching the NEW callout so the highlight reads as one feature */
+h1 .hv{color:var(--mint)}
 .sub{margin-top:12px; font-size:16.5px; color:var(--muted); max-width:62ch; line-height:1.42}
 .sub b{color:var(--ink); font-weight:600}
 
@@ -147,7 +149,7 @@ footer{border-top:1px solid var(--line); padding:26px 0}
 <main class="wrap hero">
   <span class="kick"><span class="dot"></span> Native macOS · for Claude Code</span>
   <!-- EDIT-TAGLINE -->
-  <h1>Screenshot, straight into Claude</h1>
+  <h1>Screenshot, <span class="hv">speak</span> — straight into Claude</h1>
   <p class="sub">Grab a region of your screen — it lands <b>right in the Claude Code session you're already running</b>. Terminal or desktop app, no alt-tab.</p>
 
   <!-- Voice callout — the newest capability, front and center -->
