@@ -172,7 +172,8 @@ footer{border-top:1px solid var(--line); padding:26px 0}
     <span class="lbl">REC · demo.mp4</span>
     <video autoplay muted loop playsinline preload="metadata" poster="demo-poster.jpg"
            aria-label="SnippAI demo: capture a screenshot and send it into your Claude Code session">
-      <source src="demo.mp4" type="video/mp4" />
+      <!-- ?v= busts the CDN cache when the demo is re-cut (same pattern as the icons). -->
+      <source src="demo.mp4?v=2" type="video/mp4" />
     </video>
   </div>
 
