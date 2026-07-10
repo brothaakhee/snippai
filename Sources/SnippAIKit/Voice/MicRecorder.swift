@@ -80,9 +80,11 @@ public final class MicRecorder {
             let rms = sqrt(chunk.reduce(0) { $0 + $1 * $1 } / Float(max(chunk.count, 1)))
             Task { @MainActor [weak self] in
                 guard let self, self.isRecording else { return }
-                // Map typical speech RMS (~0.01–0.2) onto 0…1 with smoothing.
-                let target = min(1, rms * 8)
-                self.level = self.level * 0.6 + target * 0.4
+                // Square-root curve: speech RMS is small (~0.01–0.2), and a linear
+                // map leaves the meter visually dead for normal voices. sqrt lifts
+                // quiet speech into the visible range while still saturating loud.
+                let target = min(1, (rms * 12).squareRoot())
+                self.level = self.level * 0.55 + target * 0.45
             }
         }
 

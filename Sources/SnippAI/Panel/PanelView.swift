@@ -410,6 +410,15 @@ private struct ComposeView: View {
         // Voice-first: start listening the moment the compose view appears (no-op
         // unless voice is enabled and ready). Leaving compose discards the audio.
         .onAppear { Task { await voice.beginRecording() } }
+        // …and when voice finishes SETTING UP while compose is already open (panel
+        // opened within seconds of launch, or mid-download) — but only on the
+        // setup→ready transition. recording→ready (typing cancel) must NOT
+        // re-arm the mic against the user's choice.
+        .onChange(of: voice.phase) { old, new in
+            if new == .ready, old == .preparing || isDownloading(old) {
+                Task { await voice.beginRecording() }
+            }
+        }
         .onDisappear { voice.cancelRecording() }
     }
 
@@ -514,11 +523,20 @@ private struct ComposeView: View {
             HStack(alignment: .bottom, spacing: 8) {
                 ZStack(alignment: .topLeading) {
                     if model.messageText.isEmpty {
-                        Text("Tell Claude what to do…")
-                            .foregroundStyle(.tertiary)
-                            .scaledFont(13)
-                            .padding(.horizontal, 6).padding(.vertical, 8)
-                            .allowsHitTesting(false)
+                        // While listening, the empty field becomes a live waveform —
+                        // continuous motion says "recording is ongoing", bar heights
+                        // say "it hears you". Typing replaces it (and cancels voice).
+                        if voice.phase == .recording {
+                            VoiceWaveform(voice: voice)
+                                .padding(.horizontal, 6).padding(.vertical, 8)
+                                .allowsHitTesting(false)
+                        } else {
+                            Text("Tell Claude what to do…")
+                                .foregroundStyle(.tertiary)
+                                .scaledFont(13)
+                                .padding(.horizontal, 6).padding(.vertical, 8)
+                                .allowsHitTesting(false)
+                        }
                     }
                     MessageInput(text: $model.messageText, onSubmit: handleSubmit,
                                  onCancel: { model.backToPicker() },
@@ -584,6 +602,11 @@ private struct ComposeView: View {
         .padding(.horizontal, PanelStyle.contentInset).padding(.top, PanelStyle.rowPadV).padding(.bottom, 12)
     }
 
+    private func isDownloading(_ phase: VoiceController.Phase) -> Bool {
+        if case .downloading = phase { return true }
+        return false
+    }
+
     /// Stop listening → transcript lands in the field for review; Enter then sends.
     private func stopAndReview() {
         Task {
@@ -647,6 +670,49 @@ private struct ComposeView: View {
     }
 }
 
+/// A live input waveform: a fixed window of bars scrolls left ~11×/s while
+/// recording, heights driven by the mic level — so silence still visibly moves
+/// (flat bars scrolling) and speech visibly dances. Standalone view: its timer
+/// tick re-renders only this view, not the compose body.
+private struct VoiceWaveform: View {
+    let voice: VoiceController
+    @State private var bars: [Float] = Array(repeating: 0, count: 26)
+    @State private var phase = 0.0
+    private let tick = Timer.publish(every: 0.09, on: .main, in: .common).autoconnect()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(bars.indices, id: \.self) { i in
+                Capsule()
+                    .fill(PanelStyle.accent.opacity(0.45 + 0.55 * Double(bars[i])))
+                    .frame(width: 2.5, height: barHeight(i))
+            }
+            Text("listening")
+                .scaledFont(11).foregroundStyle(PanelStyle.accent.opacity(0.7))
+                .padding(.leading, 6)
+        }
+        .frame(height: 20, alignment: .center)
+        .onReceive(tick) { _ in
+            guard !reduceMotion else { bars = Array(repeating: voice.level, count: 26); return }
+            bars.removeFirst()
+            bars.append(voice.level)
+            phase += 0.45
+        }
+        .animation(reduceMotion ? nil : .linear(duration: 0.09), value: bars)
+        .accessibilityLabel("Listening")
+        .accessibilityAddTraits(.updatesFrequently)
+    }
+
+    /// Voice level drives the height; a small traveling ripple keeps the strip
+    /// visibly alive in silence — scrolling *flat* bars is indistinguishable from
+    /// a frozen UI, which defeats the whole "am I being recorded?" signal.
+    private func barHeight(_ i: Int) -> CGFloat {
+        let idle = reduceMotion ? 0 : (sin(Double(i) * 0.55 + phase) + 1) * 1.6
+        return 3 + idle + CGFloat(bars[i]) * 15
+    }
+}
+
 /// The mic control: idle → start listening; listening → stop & review (pulsing
 /// with the live input level); transcribing → spinner. Hidden while voice is off
 /// or setting up. A standalone view so the ~10 Hz `voice.level` updates re-render
@@ -677,6 +743,13 @@ private struct MicButton: View {
                         ? PanelStyle.accent.opacity(0.25 + 0.5 * Double(voice.level))
                         : Color.primary.opacity(0.12),
                     in: Circle())
+                // A ring that swells with the input level — motion outside the
+                // circle's bounds reads as "live" even at a glance.
+                .overlay(
+                    Circle()
+                        .strokeBorder(PanelStyle.accent.opacity(isRecording ? 0.35 + 0.45 * Double(voice.level) : 0), lineWidth: 1.5)
+                        .scaleEffect(isRecording ? 1.15 + CGFloat(voice.level) * 0.45 : 1)
+                )
                 .foregroundStyle(isRecording ? PanelStyle.accent : .secondary)
                 .frame(height: rowHeight)
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: voice.level)
