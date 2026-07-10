@@ -1,4 +1,6 @@
-import AVFoundation
+// @preconcurrency: AVFAudio's tap types predate Sendable annotations; the tap
+// closure's thread-safety is handled explicitly (see installTap below).
+@preconcurrency import AVFoundation
 import Observation
 import os
 
@@ -51,13 +53,18 @@ public final class MicRecorder {
 
         let sink = self.sink
         let ratio = Self.sampleRate / inFormat.sampleRate
-        input.installTap(onBus: 0, bufferSize: 4096, format: inFormat) { [weak self] buffer, _ in
+        // The tap runs on AVFAudio's realtime queue. The closure MUST be @Sendable —
+        // without it, Swift isolates the closure to this @MainActor type and the
+        // runtime's executor assertion SIGTRAPs on the first callback. The converter
+        // is only ever touched on the tap's serial queue, hence nonisolated(unsafe).
+        nonisolated(unsafe) let tapConverter = converter
+        input.installTap(onBus: 0, bufferSize: 4096, format: inFormat) { @Sendable [weak self] buffer, _ in
             // Convert this tap buffer; the shared converter keeps resampler continuity.
             let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 64
             guard let out = AVAudioPCMBuffer(pcmFormat: outFormat, frameCapacity: capacity) else { return }
             var served = false
             var convertError: NSError?
-            converter.convert(to: out, error: &convertError) { _, status in
+            tapConverter.convert(to: out, error: &convertError) { _, status in
                 if served { status.pointee = .noDataNow; return nil }
                 served = true
                 status.pointee = .haveData
