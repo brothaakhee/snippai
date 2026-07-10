@@ -15,6 +15,11 @@ final class VoiceController {
         case ready                    // idle, mic available
         case recording
         case transcribing
+
+        var isDownloading: Bool {
+            if case .downloading = self { return true }
+            return false
+        }
     }
 
     private(set) var phase: Phase = .disabled

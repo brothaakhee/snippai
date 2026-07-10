@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>SnippAI — screenshot straight into Claude Code</title>
-<meta name="description" content="A native macOS app that fires a screenshot + your message straight into the Claude Code session you're already running — in iTerm2, Terminal.app, or the Claude desktop app (beta)." />
+<title>SnippAI — screenshot straight into Claude Code. Now with voice.</title>
+<meta name="description" content="A native macOS app that fires a screenshot + your message straight into the Claude Code session you're already running. Now speak your message — on-device voice input, nothing leaves your Mac. iTerm2, Terminal.app, or the Claude desktop app (beta)." />
 
 <!-- ───────────────────────────────────────────────────────────────────────
      Download links → https://github.com/brothaakhee/snippai-releases/releases/latest/download/SnippAI.dmg
@@ -105,6 +105,25 @@ kbd{font-family:var(--mono); font-size:12px; background:var(--surface); border:1
 .pill .beta{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);border:1px solid var(--line2);border-radius:99px;padding:1px 6px;margin-left:2px}
 .reqnote{margin-top:10px;font-family:var(--mono);font-size:11.5px;color:var(--faint)}
 
+/* voice callout — the NEW-feature banner under the hero copy */
+.voicecall{margin-top:18px; display:flex; align-items:center; gap:12px; text-align:left; max-width:640px;
+  padding:12px 16px; border:1px solid rgba(19,160,102,.35); border-radius:12px;
+  background:rgba(19,160,102,.06)}
+.vbadge{font-family:var(--mono); font-size:10px; font-weight:700; letter-spacing:.08em; color:#fff;
+  background:var(--mint); border-radius:99px; padding:3px 8px; flex:none}
+.vtext{font-size:13.5px; color:var(--muted); line-height:1.45}
+.vtext b{color:var(--ink); font-weight:600}
+/* five mint bars, breathing — the in-app listening waveform, miniaturized */
+.vwave{display:inline-flex; align-items:center; gap:2.5px; height:18px; flex:none}
+.vwave i{width:2.5px; border-radius:2px; background:var(--mint); height:6px; animation:vbar 1.1s ease-in-out infinite}
+.vwave i:nth-child(2){animation-delay:.15s}
+.vwave i:nth-child(3){animation-delay:.3s}
+.vwave i:nth-child(4){animation-delay:.45s}
+.vwave i:nth-child(5){animation-delay:.6s}
+@keyframes vbar{0%,100%{height:5px}50%{height:16px}}
+@media(prefers-reduced-motion:reduce){.vwave i{animation:none;height:10px}}
+@media(max-width:560px){.voicecall{flex-direction:column; align-items:flex-start; gap:8px}}
+
 /* footer */
 footer{border-top:1px solid var(--line); padding:26px 0}
 .foot{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; font-family:var(--mono); font-size:12.5px; color:var(--faint)}
@@ -130,6 +149,13 @@ footer{border-top:1px solid var(--line); padding:26px 0}
   <!-- EDIT-TAGLINE -->
   <h1>Screenshot, straight into Claude</h1>
   <p class="sub">Grab a region of your screen — it lands <b>right in the Claude Code session you're already running</b>. Terminal or desktop app, no alt-tab.</p>
+
+  <!-- Voice callout — the newest capability, front and center -->
+  <div class="voicecall">
+    <span class="vbadge">NEW</span>
+    <span class="vwave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+    <span class="vtext"><b>Now speak your message.</b> The panel listens the moment it opens — say what you want fixed, review, send. Transcribed <b>entirely on your Mac</b>; audio never leaves it.</span>
+  </div>
 
   <div class="pills">
     <span class="pwith">Works with</span>

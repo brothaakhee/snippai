@@ -415,7 +415,7 @@ private struct ComposeView: View {
         // setup→ready transition. recording→ready (typing cancel) must NOT
         // re-arm the mic against the user's choice.
         .onChange(of: voice.phase) { old, new in
-            if new == .ready, old == .preparing || isDownloading(old) {
+            if new == .ready, old == .preparing || old.isDownloading {
                 Task { await voice.beginRecording() }
             }
         }
@@ -602,11 +602,6 @@ private struct ComposeView: View {
         .padding(.horizontal, PanelStyle.contentInset).padding(.top, PanelStyle.rowPadV).padding(.bottom, 12)
     }
 
-    private func isDownloading(_ phase: VoiceController.Phase) -> Bool {
-        if case .downloading = phase { return true }
-        return false
-    }
-
     /// Stop listening → transcript lands in the field for review; Enter then sends.
     private func stopAndReview() {
         Task {
@@ -678,7 +673,11 @@ private struct VoiceWaveform: View {
     let voice: VoiceController
     @State private var bars: [Float] = Array(repeating: 0, count: 26)
     @State private var phase = 0.0
-    private let tick = Timer.publish(every: 0.09, on: .main, in: .common).autoconnect()
+    /// One constant for both the timer and the animation duration — they must match
+    /// or the scroll stutters. (The subscription tears down with the view, so the
+    /// timer stops when recording ends and the waveform is removed.)
+    private static let tickInterval = 0.09
+    private let tick = Timer.publish(every: tickInterval, on: .main, in: .common).autoconnect()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -699,7 +698,7 @@ private struct VoiceWaveform: View {
             bars.append(voice.level)
             phase += 0.45
         }
-        .animation(reduceMotion ? nil : .linear(duration: 0.09), value: bars)
+        .animation(reduceMotion ? nil : .linear(duration: Self.tickInterval), value: bars)
         .accessibilityLabel("Listening")
         .accessibilityAddTraits(.updatesFrequently)
     }
