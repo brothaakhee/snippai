@@ -46,6 +46,11 @@ final class SettingsController: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    /// Whether the Settings window is currently open — the hotkey watchdog pauses
+    /// while it is, so a re-assert can't fight the shortcut recorder (which needs
+    /// the combo released while listening for a new one).
+    var isOpen: Bool { window != nil }
+
     func close() { window?.close() }
 
     func windowWillClose(_ notification: Notification) {

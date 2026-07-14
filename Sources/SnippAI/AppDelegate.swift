@@ -19,6 +19,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var captureMenuItem: NSMenuItem?
     private var updateMenuItem: NSMenuItem?
     private var hotKey: HotKey?
+    /// Never invalidated by design: AppDelegate lives for the process's lifetime,
+    /// and Swift 6 forbids touching a non-Sendable Timer from a nonisolated deinit.
+    private var hotKeyWatchdog: Timer?
     private var isCapturing = false
 
     /// A small colored dot overlaid on the menu-bar icon when a tracked session
@@ -51,6 +54,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let ok = self.bindHotKey(to: combo)
             self.refreshCaptureMenuTitle()
             return ok
+        }
+        // Self-healing: macOS can silently drop a Carbon registration out from under
+        // a live process (observed in the field 2026-07-14: healthy app, combo
+        // unclaimed at the OS level, hotkey dead until relaunch). Carbon offers no
+        // "is my ref still alive" query, so re-assert the binding periodically and
+        // after wake — Unregister+Register of the current combo is sub-millisecond.
+        hotKeyWatchdog = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.reassertHotKey() }
+        }
+        NotificationCenter.default.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.reassertHotKey() }
         }
         onboarding.shortcutDisplayProvider = { [weak self] in
             self?.shortcutStore.combo.displayString ?? "⌥⇧4"
@@ -209,6 +225,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let key = HotKey(combo: combo) { [weak self] in self?.beginCapture() }
         hotKey = key
         return key.isRegistered
+    }
+
+    /// Watchdog tick: re-claim the current combo. Skipped while Settings is open —
+    /// the shortcut recorder needs the combo released while listening for a new one,
+    /// and a re-assert mid-recording would fight it. Known trade-off: a Settings
+    /// window left open pauses the watchdog for that whole time; ticks resume (and
+    /// heal any lost registration) as soon as it closes.
+    private func reassertHotKey() {
+        guard !settings.isOpen else { return }
+        bindHotKey(to: shortcutStore.combo)
     }
 
     // MARK: - Menu bar
