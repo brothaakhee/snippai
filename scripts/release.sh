@@ -91,7 +91,12 @@ mkdir "${STAGE}/.background"
 cp "${ROOT}/Resources/dmg/background.png" "${STAGE}/.background/background.png"
 
 # Read-write image so Finder can persist the view options into its .DS_Store.
-hdiutil detach "/Volumes/${VOL}" >/dev/null 2>&1 || true
+# Force-detach EVERY matching volume first ("SnippAI", "SnippAI 1", …): a mounted
+# installer — even one busy with an open Finder window — would otherwise push our
+# fresh image to a different name and break the styling AppleScript's disk lookup.
+for v in "/Volumes/${VOL}" "/Volumes/${VOL} "*; do
+    [ -d "$v" ] && hdiutil detach -force "$v" >/dev/null 2>&1 || true
+done
 RW="$(mktemp -d)/rw.dmg"
 hdiutil create -volname "${VOL}" -srcfolder "${STAGE}" -ov -format UDRW -fs HFS+ "${RW}" >/dev/null
 hdiutil attach "${RW}" -noautoopen >/dev/null
