@@ -6,6 +6,7 @@ import SnippAIKit
 struct PanelView: View {
     @Bindable var model: AppModel
     let voice: VoiceController
+    let ask: AskController
     var onClose: () -> Void
     var onAddScreenshot: () -> Void = {}
     /// Called as the user drags the opacity slider, so the controller can fade the
@@ -18,12 +19,14 @@ struct PanelView: View {
 
     init(model: AppModel,
          voice: VoiceController,
+         ask: AskController,
          onClose: @escaping () -> Void,
          onAddScreenshot: @escaping () -> Void = {},
          initialOpacity: Double = 1.0,
          onOpacityChange: @escaping (Double) -> Void = { _ in }) {
         self._model = Bindable(wrappedValue: model)
         self.voice = voice
+        self.ask = ask
         self.onClose = onClose
         self.onAddScreenshot = onAddScreenshot
         self.onOpacityChange = onOpacityChange
@@ -45,11 +48,17 @@ struct PanelView: View {
                              onDismiss: { model.dismissUpdateBanner() })
                 Divider().opacity(0.5)
             }
-            switch model.phase {
-            case .picking:
-                SessionPickerView(model: model, onCancel: onClose)
-            case .composing:
-                ComposeView(model: model, voice: voice)
+            // Ask takes over the panel while active — a side-quest view that never
+            // touches the session phases underneath it.
+            if ask.isActive {
+                AskView(ask: ask, onClose: onClose)
+            } else {
+                switch model.phase {
+                case .picking:
+                    SessionPickerView(model: model, onCancel: onClose)
+                case .composing:
+                    ComposeView(model: model, voice: voice)
+                }
             }
         }
         // Fill the (resizable) window rather than a fixed size, so dragging the
@@ -409,13 +418,19 @@ private struct ComposeView: View {
         }
         // Voice-first: start listening the moment the compose view appears (no-op
         // unless voice is enabled and ready). Leaving compose discards the audio.
-        .onAppear { Task { await voice.beginRecording() } }
+        // Gated on real panel visibility: the hierarchy stays mounted in an
+        // ordered-out window, so onAppear can fire while HIDDEN (ComposeView
+        // remounting after an Ask dismissal) — a hidden panel must never listen.
+        .onAppear {
+            guard model.panelIsVisible else { return }
+            Task { await voice.beginRecording() }
+        }
         // …and when voice finishes SETTING UP while compose is already open (panel
         // opened within seconds of launch, or mid-download) — but only on the
         // setup→ready transition. recording→ready (typing cancel) must NOT
         // re-arm the mic against the user's choice.
         .onChange(of: voice.phase) { old, new in
-            if new == .ready, old == .preparing || old.isDownloading {
+            if new == .ready, old == .preparing || old.isDownloading, model.panelIsVisible {
                 Task { await voice.beginRecording() }
             }
         }

@@ -15,6 +15,11 @@ final class AppModel {
 
     var phase: Phase = .picking
     var sessions: [TerminalSession] = []
+    /// Maintained by PanelController (show/hide). Views consult it before starting
+    /// anything that must never run off-screen — the SwiftUI hierarchy stays mounted
+    /// in an ordered-out window, so `onAppear` alone can fire while hidden (e.g.
+    /// ComposeView remounting after Ask dismissal must NOT hot-mic a hidden panel).
+    var panelIsVisible = false
 
     // MARK: - Update banner (fed by UpdateController via AppDelegate)
 
@@ -382,6 +387,15 @@ final class AppModel {
     /// Removes a staged screenshot.
     func removeScreenshot(_ url: URL) {
         screenshotURLs.removeAll { $0 == url }
+    }
+
+    /// The transcript path of the session the user most recently worked in — the
+    /// MVP context heuristic for Ask ("explain why the assistant said this").
+    /// Hook-derived, so it's only known when the Claude Code status integration
+    /// has seen the session; nil otherwise (Ask degrades to a context-free answer).
+    var lastUsedSessionTranscriptPath: String? {
+        guard let id = lastUsedSessionID else { return nil }
+        return sessionTranscriptPaths[id]
     }
 
     /// Appends text into the draft (voice transcript, future paste/drop sources) —

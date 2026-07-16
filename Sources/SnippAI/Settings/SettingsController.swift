@@ -13,14 +13,16 @@ final class SettingsController: NSObject, NSWindowDelegate {
     private let license: LicenseStore
     private let launchAtLogin: LaunchAtLoginStore
     private let voice: VoiceController
+    private let ask: AskController
 
     init(store: ShortcutStore, hooks: HookController, license: LicenseStore,
-         launchAtLogin: LaunchAtLoginStore, voice: VoiceController) {
+         launchAtLogin: LaunchAtLoginStore, voice: VoiceController, ask: AskController) {
         self.store = store
         self.hooks = hooks
         self.license = license
         self.launchAtLogin = launchAtLogin
         self.voice = voice
+        self.ask = ask
     }
 
     func show() {
@@ -30,7 +32,7 @@ final class SettingsController: NSObject, NSWindowDelegate {
             return
         }
         NSApp.setActivationPolicy(.regular)
-        let hosting = NSHostingController(rootView: SettingsView(store: store, hooks: hooks, license: license, launchAtLogin: launchAtLogin, voice: voice, onDone: { [weak self] in
+        let hosting = NSHostingController(rootView: SettingsView(store: store, hooks: hooks, license: license, launchAtLogin: launchAtLogin, voice: voice, ask: ask, onDone: { [weak self] in
             self?.close()
         }))
         let window = NSWindow(contentViewController: hosting)

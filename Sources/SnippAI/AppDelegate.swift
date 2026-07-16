@@ -1,11 +1,13 @@
 import AppKit
+import Carbon.HIToolbox
 import SnippAIKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let model = AppModel()
     private let voiceController = VoiceController()
-    private lazy var panelController = PanelController(model: model, voice: voiceController)
+    private let askController = AskController()
+    private lazy var panelController = PanelController(model: model, voice: voiceController, ask: askController)
     private let captureController = CaptureController()
     private let onboarding = OnboardingController()
     private let shortcutStore = ShortcutStore()
@@ -14,11 +16,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let updateController = UpdateController()
     private lazy var paywallController = PaywallController()
     private lazy var hookController = HookController(model: model)
-    private lazy var settings = SettingsController(store: shortcutStore, hooks: hookController, license: licenseStore, launchAtLogin: launchAtLoginStore, voice: voiceController)
+    private lazy var settings = SettingsController(store: shortcutStore, hooks: hookController, license: licenseStore, launchAtLogin: launchAtLoginStore, voice: voiceController, ask: askController)
     private var statusItem: NSStatusItem?
     private var captureMenuItem: NSMenuItem?
     private var updateMenuItem: NSMenuItem?
     private var hotKey: HotKey?
+    private var askHotKey: HotKey?
     /// Never invalidated by design: AppDelegate lives for the process's lifetime,
     /// and Swift 6 forbids touching a non-Sendable Timer from a nonisolated deinit.
     private var hotKeyWatchdog: Timer?
@@ -47,6 +50,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CaptureController.sweepOldScreenshots()
         setupStatusItem()
         bindHotKey(to: shortcutStore.combo)
+        bindAskHotKey()
+        // Toggling Ask in Settings claims/releases ⌥⇧A immediately.
+        askController.onEnabledChange = { [weak self] in self?.bindAskHotKey() }
         // Re-register live (no relaunch) whenever the user changes the shortcut, and
         // refresh the menu so it shows the new glyphs.
         shortcutStore.onChange = { [weak self] combo in
@@ -227,6 +233,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return key.isRegistered
     }
 
+    /// Ask's fixed shortcut (⌥⇧A — mnemonic "Ask"; MVP: not yet rebindable).
+    /// Registered on its own Carbon id so it never collides with capture.
+    /// Respects the Settings kill switch: a disabled feature must RELEASE the
+    /// combo — otherwise SnippAI keeps swallowing ⌥⇧A (the Å keystroke on many
+    /// layouts) system-wide while doing nothing with it.
+    @discardableResult
+    private func bindAskHotKey() -> Bool {
+        askHotKey = nil
+        guard askController.isEnabled else { return true }
+        let combo = HotKey.KeyCombo(keyCode: UInt32(kVK_ANSI_A), modifiers: UInt32(optionKey | shiftKey))
+        let key = HotKey(combo: combo, id: 2) { [weak self] in self?.beginAsk() }
+        askHotKey = key
+        return key.isRegistered
+    }
+
     /// Watchdog tick: re-claim the current combo. Skipped while Settings is open —
     /// the shortcut recorder needs the combo released while listening for a new one,
     /// and a re-assert mid-recording would fight it. Known trade-off: a Settings
@@ -235,6 +256,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func reassertHotKey() {
         guard !settings.isOpen else { return }
         bindHotKey(to: shortcutStore.combo)
+        bindAskHotKey()
     }
 
     // MARK: - Menu bar
@@ -392,6 +414,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // capture — otherwise an expired user could bypass the paywall here.
         withLicenseGate { [weak self] in
             guard let self else { return }
+            askController.cancel()   // opening the panel proper supersedes an ask
             Task {
                 await self.model.beginSession(screenshots: self.model.screenshotURLs)
                 self.panelController.show(onClose: {})
@@ -417,6 +440,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Capture flow
 
+    // MARK: - Ask flow (⌥⇧A: highlight → OCR → one-shot explanation)
+
+    private func beginAsk() {
+        guard !isCapturing, askController.isEnabled else { return }
+        guard AskController.claudeAvailable else {
+            askController.cancel()
+            NSSound.beep()
+            return
+        }
+        withLicenseGate { [weak self] in self?.performAsk() }
+    }
+
+    private func performAsk() {
+        guard !isCapturing else { return }
+        isCapturing = true
+        Task {
+            defer { isCapturing = false }
+            do {
+                guard let outcome = try await captureController.captureRegion() else { return } // cancelled
+                guard let image = NSImage(contentsOf: outcome.url)?
+                    .cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+                    NSSound.beep()   // capture file unreadable — never fail silently
+                    return
+                }
+                // Vision's accurate pass costs 0.1–1s — keep it off the main actor.
+                let text = await Task.detached { (try? TextRecognizer.recognize(in: image)) ?? "" }.value
+                let highlighted = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !highlighted.isEmpty else {
+                    NSSound.beep()   // nothing readable in the region
+                    return
+                }
+                askController.begin(highlighted: highlighted,
+                                    transcriptPath: model.lastUsedSessionTranscriptPath)
+                panelController.show(besideSelection: outcome.globalRect, onClose: {})
+            } catch {
+                presentError(error)
+            }
+        }
+    }
+
     private func beginCapture() {
         guard !isCapturing else { return }
         withLicenseGate { [weak self] in self?.performCapture() }
@@ -424,6 +487,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func performCapture() {
         guard !isCapturing else { return }
+        // A new capture supersedes any Ask in progress (the documented contract) —
+        // otherwise the screenshot appends invisibly behind the Ask view.
+        askController.cancel()
         // If we'd be appending to an open draft that's already at the cap, don't make
         // the user drag out a region that gets discarded — give audible feedback.
         if panelController.isVisible && !model.canAddScreenshot {

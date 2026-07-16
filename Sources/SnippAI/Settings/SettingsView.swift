@@ -9,6 +9,7 @@ struct SettingsView: View {
     @Bindable var license: LicenseStore
     @Bindable var launchAtLogin: LaunchAtLoginStore
     @Bindable var voice: VoiceController
+    @Bindable var ask: AskController
     var onDone: () -> Void
 
     @Environment(\.openURL) private var openURL
@@ -35,6 +36,7 @@ struct SettingsView: View {
                 }
                 launchAtLoginCard
                 voiceCard
+                askCard
                 claudeStatusCard
                 licenseCard
             }
@@ -90,69 +92,33 @@ struct SettingsView: View {
         .animation(.easeInOut(duration: 0.15), value: store.combo)
     }
 
-    // MARK: Launch at login card
+    // MARK: Toggle cards (shared scaffold — see SettingsToggleCard below)
 
     private var launchAtLoginCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center, spacing: 12) {
-                Image(systemName: "power")
-                    .scaledFont(15).foregroundStyle(.secondary).frame(width: 22)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Launch at login").scaledFont(13, weight: .semibold)
-                    Text("Start SnippAI automatically so \(store.combo.displayString) always works.")
-                        .scaledFont(11).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 8)
-                Toggle("", isOn: Binding(
-                    get: { launchAtLogin.isEnabled },
-                    set: { launchAtLogin.setEnabled($0) }
-                ))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .accessibilityLabel("Launch at login")
-            }
+        SettingsToggleCard(
+            icon: "power",
+            title: "Launch at login",
+            subtitle: "Start SnippAI automatically so \(store.combo.displayString) always works.",
+            isOn: Binding(get: { launchAtLogin.isEnabled }, set: { launchAtLogin.setEnabled($0) }),
+            toggleLabel: "Launch at login"
+        ) {
             if let status = launchAtLogin.statusMessage {
                 StatusLabel(text: status)
             }
         }
-        .padding(12)
-        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: PanelStyle.cardRadius))
         .animation(.easeInOut(duration: 0.15), value: launchAtLogin.isEnabled)
     }
 
-    // MARK: Voice input card
-
     private var voiceCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center, spacing: 12) {
-                Image(systemName: "mic")
-                    .scaledFont(15).foregroundStyle(.secondary).frame(width: 22)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text("Voice input").scaledFont(13, weight: .semibold)
-                        Text("beta")
-                            .scaledFont(9, weight: .bold)
-                            .padding(.horizontal, 4).padding(.vertical, 1)
-                            .background(Color.secondary.opacity(0.2), in: Capsule())
-                            .foregroundStyle(.secondary)
-                    }
-                    Text("Speak your message — the panel listens when it opens. Return stops to review; typing switches to text.")
-                        .scaledFont(11).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 8)
-                Toggle("", isOn: Binding(
-                    get: { voice.isEnabled },
-                    set: { voice.setEnabled($0) }
-                ))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .accessibilityLabel("Enable voice input")
-            }
-            Text("Downloads a ~600 MB speech model once. Transcription runs entirely on this Mac — audio never leaves it.")
-                .scaledFont(10).foregroundStyle(.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
+        SettingsToggleCard(
+            icon: "mic",
+            title: "Voice input",
+            beta: true,
+            subtitle: "Speak your message — the panel listens when it opens. Return stops to review; typing switches to text.",
+            footnote: "Downloads a ~600 MB speech model once. Transcription runs entirely on this Mac — audio never leaves it.",
+            isOn: Binding(get: { voice.isEnabled }, set: { voice.setEnabled($0) }),
+            toggleLabel: "Enable voice input"
+        ) {
             switch voice.phase {
             case .downloading(let fraction):
                 HStack(spacing: 8) {
@@ -172,49 +138,37 @@ struct SettingsView: View {
                 StatusLabel(text: status)
             }
         }
-        .padding(12)
-        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: PanelStyle.cardRadius))
         .animation(.easeInOut(duration: 0.15), value: voice.phase)
     }
 
-    // MARK: Claude Code status card
+    private var askCard: some View {
+        SettingsToggleCard(
+            icon: "sparkle.magnifyingglass",
+            title: "Ask",
+            beta: true,
+            subtitle: "Press ⌥⇧A and select any text on screen — get a quick explanation without touching your session.",
+            footnote: AskController.claudeAvailable
+                ? "Answers come from a one-off Claude session (haiku, no tools) using your existing Claude Code sign-in."
+                : "Needs the Claude Code CLI (`claude`) installed and signed in.",
+            isOn: Binding(get: { ask.isEnabled }, set: { ask.setEnabled($0) }),
+            toggleLabel: "Enable Ask"
+        )
+    }
 
     private var claudeStatusCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center, spacing: 12) {
-                Image(systemName: "dot.radiowaves.left.and.right")
-                    .scaledFont(15).foregroundStyle(.secondary).frame(width: 22)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text("Claude Code status").scaledFont(13, weight: .semibold)
-                        Text("beta")
-                            .scaledFont(9, weight: .bold)
-                            .padding(.horizontal, 4).padding(.vertical, 1)
-                            .background(Color.secondary.opacity(0.2), in: Capsule())
-                            .foregroundStyle(.secondary)
-                    }
-                    Text("Show a “Done / Needs you” badge by letting Claude Code notify SnippAI.")
-                        .scaledFont(11).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 8)
-                Toggle("", isOn: Binding(
-                    get: { hooks.isEnabled },
-                    set: { hooks.setEnabled($0) }
-                ))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .accessibilityLabel("Enable Claude Code status")
-            }
-            Text("Adds two read-only hooks to ~/.claude/settings.json (a timestamped backup is made first). It never blocks Claude, and turning this off removes them.")
-                .scaledFont(10).foregroundStyle(.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
+        SettingsToggleCard(
+            icon: "dot.radiowaves.left.and.right",
+            title: "Claude Code status",
+            beta: true,
+            subtitle: "Show a “Done / Needs you” badge by letting Claude Code notify SnippAI.",
+            footnote: "Adds two read-only hooks to ~/.claude/settings.json (a timestamped backup is made first). It never blocks Claude, and turning this off removes them.",
+            isOn: Binding(get: { hooks.isEnabled }, set: { hooks.setEnabled($0) }),
+            toggleLabel: "Enable Claude Code status"
+        ) {
             if let status = hooks.statusMessage {
                 StatusLabel(text: status, isWarning: hooks.statusIsWarning)
             }
         }
-        .padding(12)
-        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: PanelStyle.cardRadius))
         .animation(.easeInOut(duration: 0.15), value: hooks.isEnabled)
     }
 
@@ -356,5 +310,65 @@ struct SettingsView: View {
         recorder.stop()
         store.resetToDefault()
         message = Message(text: "Reset to the default \(store.combo.displayString).", isWarning: false)
+    }
+}
+
+/// The house scaffold for a Settings card with a trailing switch: icon column,
+/// title (+ optional beta chip), wrapping subtitle, optional tertiary footnote,
+/// and a content slot for progress/status rows. Extracted when the fourth
+/// hand-rolled copy appeared — every future toggle card inherits the language.
+private struct SettingsToggleCard<Content: View>: View {
+    let icon: String
+    let title: String
+    var beta = false
+    let subtitle: String
+    var footnote: String?
+    let isOn: Binding<Bool>
+    let toggleLabel: String
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: icon)
+                    .scaledFont(15).foregroundStyle(.secondary).frame(width: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(title).scaledFont(13, weight: .semibold)
+                        if beta {
+                            Text("beta")
+                                .scaledFont(9, weight: .bold)
+                                .padding(.horizontal, 4).padding(.vertical, 1)
+                                .background(Color.secondary.opacity(0.2), in: Capsule())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Text(subtitle)
+                        .scaledFont(11).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                Toggle("", isOn: isOn)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .accessibilityLabel(toggleLabel)
+            }
+            if let footnote {
+                Text(footnote)
+                    .scaledFont(10).foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            content()
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: PanelStyle.cardRadius))
+    }
+}
+
+extension SettingsToggleCard where Content == EmptyView {
+    init(icon: String, title: String, beta: Bool = false, subtitle: String,
+         footnote: String? = nil, isOn: Binding<Bool>, toggleLabel: String) {
+        self.init(icon: icon, title: title, beta: beta, subtitle: subtitle,
+                  footnote: footnote, isOn: isOn, toggleLabel: toggleLabel) { EmptyView() }
     }
 }
