@@ -30,7 +30,9 @@ public enum AskContext {
 
     /// The one-shot prompt. Keep it boring and directive: brief answer, own
     /// knowledge only (belt-and-braces with the CLI's tool ban), then stop.
-    public static func prompt(highlighted: String, context: String?) -> String {
+    /// `question` is the user's own words (spoken or typed); nil falls back to
+    /// the canned "explain this" — the two never appear together.
+    public static func prompt(question: String?, highlighted: String, context: String?) -> String {
         var p = ""
         if let context, !context.isEmpty {
             p += """
@@ -48,9 +50,14 @@ public enum AskContext {
 
         "\(highlighted)"
 
-        Briefly explain what it means\(context != nil ? " and why it was used in that context" : ""). \
-        2-4 sentences, then stop. Answer from your own knowledge only — do not use any tools.
         """
+        if let question, !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            p += "Their question about it: \(question)\n\nAnswer that question briefly (a few sentences)"
+        } else {
+            p += "Briefly explain what it means\(context != nil ? " and why it was used in that context" : ""). 2-4 sentences"
+        }
+        // One constraint sentence for both paths.
+        p += ", then stop. Answer from your own knowledge only — do not use any tools."
         return p
     }
 }

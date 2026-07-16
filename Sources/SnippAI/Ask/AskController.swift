@@ -11,6 +11,7 @@ import SnippAIKit
 final class AskController {
     enum State: Equatable {
         case inactive
+        case composingQuestion(quote: String)   // quote captured; user speaks/types the question
         case answering(quote: String)
         case done(quote: String)
     }
@@ -45,10 +46,28 @@ final class AskController {
     /// after cancellation must never touch the new ask's state.
     private var generation = 0
 
-    /// Starts a one-shot for the highlighted text. `transcriptPath` (when known)
-    /// supplies the "why was this said here" context.
-    func begin(highlighted: String, transcriptPath: String?) {
-        cancel()   // a new ask replaces any previous one
+    private var transcriptPath: String?
+
+    /// Enters the question phase for a captured quote: the panel shows it and
+    /// waits for the user's question (spoken or typed; empty = "explain this").
+    func prepare(highlighted: String, transcriptPath: String?) {
+        cancel()
+        self.transcriptPath = transcriptPath
+        statusMessage = nil
+        state = .composingQuestion(quote: highlighted)
+    }
+
+    /// Runs the one-shot with the user's question (nil/empty → canned "explain").
+    func submit(question: String?) {
+        guard case .composingQuestion(let quote) = state else { return }
+        begin(highlighted: quote, question: question)
+    }
+
+    /// Starts the one-shot for the current quote + question. Context comes from
+    /// the transcript path captured in `prepare`.
+    private func begin(highlighted: String, question: String?) {
+        let transcriptPath = self.transcriptPath
+        cancelWork()   // a new ask replaces any previous one (keep view mounted)
         generation += 1
         let gen = generation
         answer = ""
@@ -62,7 +81,7 @@ final class AskController {
             }.value
             guard let self, self.generation == gen else { return }
 
-            let prompt = AskContext.prompt(highlighted: highlighted, context: context)
+            let prompt = AskContext.prompt(question: question, highlighted: highlighted, context: context)
             let events: AsyncStream<ClaudeOneShot.StreamEvent>
             do {
                 let started = try ClaudeOneShot.run(prompt: prompt)
@@ -97,12 +116,18 @@ final class AskController {
 
     /// Stops everything and leaves ask mode (Esc, panel close, new capture).
     func cancel() {
+        cancelWork()
+        state = .inactive
+        answer = ""
+    }
+
+    /// Stops the subprocess/stream without leaving ask mode (used when a new
+    /// question replaces a streaming answer inside the same panel).
+    private func cancelWork() {
         generation += 1            // orphan any in-flight task's late writes
         streamTask?.cancel()
         streamTask = nil
         if let process, process.isRunning { process.terminate() }
         process = nil
-        state = .inactive
-        answer = ""
     }
 }

@@ -89,7 +89,8 @@ final class AskEngineTests: XCTestCase {
     // MARK: - Prompt building
 
     func testPromptIncludesQuoteContextAndConstraints() {
-        let p = AskContext.prompt(highlighted: "Caesar's-wife rule",
+        let p = AskContext.prompt(question: nil,
+                                  highlighted: "Caesar's-wife rule",
                                   context: "Make it policy - it is your Caesar's-wife rule.")
         XCTAssertTrue(p.contains("Caesar's-wife rule"))
         XCTAssertTrue(p.contains("Make it policy"))
@@ -98,9 +99,54 @@ final class AskEngineTests: XCTestCase {
     }
 
     func testPromptWithoutContextStillWellFormed() {
-        let p = AskContext.prompt(highlighted: "dead man's switch", context: nil)
+        let p = AskContext.prompt(question: nil, highlighted: "dead man's switch", context: nil)
         XCTAssertTrue(p.contains("dead man's switch"))
         XCTAssertFalse(p.contains("conversation below"), "no dangling context framing")
+    }
+
+    func testWhitespaceOnlyQuestionFallsBackToCannedExplain() {
+        let p = AskContext.prompt(question: "   \n  ", highlighted: "idempotency key", context: nil)
+        XCTAssertTrue(p.lowercased().contains("briefly explain what it means"),
+                      "blank question must use the canned explanation")
+        XCTAssertFalse(p.contains("Their question about it"))
+    }
+
+    func testPromptCarriesTheUsersOwnQuestion() {
+        let p = AskContext.prompt(question: "what is this company and why does it matter here?",
+                                  highlighted: "QuikTrak",
+                                  context: "QuikTrak-type shops have national contracts.")
+        XCTAssertTrue(p.contains("what is this company and why does it matter here?"))
+        XCTAssertTrue(p.contains("QuikTrak"))
+        // The user's question REPLACES the canned one — no double-asking.
+        XCTAssertFalse(p.lowercased().contains("briefly explain what it means"),
+                       "canned question must not appear alongside a real one")
+        XCTAssertTrue(p.lowercased().contains("do not use any tools"), "constraints always apply")
+    }
+
+    // MARK: - Pasteboard snapshot/restore (on a private named pasteboard — never
+    // the user's real clipboard)
+
+    func testPasteboardSnapshotRoundTrip() {
+        let pb = NSPasteboard(name: NSPasteboard.Name("snippai-test-\(UUID().uuidString)"))
+        pb.clearContents()
+        pb.setString("precious clipboard contents", forType: .string)
+
+        let snapshot = PasteboardSnapshot.take(from: pb)
+        pb.clearContents()
+        pb.setString("transient ⌘C result", forType: .string)
+        XCTAssertEqual(pb.string(forType: .string), "transient ⌘C result")
+
+        snapshot.restore(to: pb)
+        XCTAssertEqual(pb.string(forType: .string), "precious clipboard contents")
+    }
+
+    func testPasteboardSnapshotOfEmptyRestoresToEmpty() {
+        let pb = NSPasteboard(name: NSPasteboard.Name("snippai-test-\(UUID().uuidString)"))
+        pb.clearContents()
+        let snapshot = PasteboardSnapshot.take(from: pb)
+        pb.setString("junk", forType: .string)
+        snapshot.restore(to: pb)
+        XCTAssertNil(pb.string(forType: .string))
     }
 
     // MARK: - Byte line buffering (pipe reads have no line framing)

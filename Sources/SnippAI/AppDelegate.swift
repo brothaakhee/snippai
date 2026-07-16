@@ -457,6 +457,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         isCapturing = true
         Task {
             defer { isCapturing = false }
+            // Selection first: if the user has text highlighted in the frontmost
+            // app, that IS the quote — exact characters, no crosshair round-trip.
+            if let selection = await SelectionGrabber.grab() {
+                askController.prepare(highlighted: selection,
+                                      transcriptPath: model.lastUsedSessionTranscriptPath)
+                panelController.show(onClose: {})
+                return
+            }
+            // Fallback: crosshair + OCR (images, non-selectable UI, no Accessibility).
             do {
                 guard let outcome = try await captureController.captureRegion() else { return } // cancelled
                 guard let image = NSImage(contentsOf: outcome.url)?
@@ -471,8 +480,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     NSSound.beep()   // nothing readable in the region
                     return
                 }
-                askController.begin(highlighted: highlighted,
-                                    transcriptPath: model.lastUsedSessionTranscriptPath)
+                askController.prepare(highlighted: highlighted,
+                                      transcriptPath: model.lastUsedSessionTranscriptPath)
                 panelController.show(besideSelection: outcome.globalRect, onClose: {})
             } catch {
                 presentError(error)

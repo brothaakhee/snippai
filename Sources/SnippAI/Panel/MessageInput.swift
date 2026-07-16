@@ -12,7 +12,9 @@ struct MessageInput: NSViewRepresentable {
     var onCancel: () -> Void = {}
     var onFocusChange: (Bool) -> Void = { _ in }
     /// ⌘+arrow while composing: cycle the target (+1 next, -1 previous).
-    var onCycleTarget: (Int) -> Void = { _ in }
+    /// nil ⇒ ⌘+arrows fall through to normal caret navigation (Ask's question
+    /// field has no target to cycle, so line/doc-end shortcuts must keep working).
+    var onCycleTarget: ((Int) -> Void)?
     var focusOnAppear: Bool = true
     // The text the user authors must scale with Dynamic Type too (NSTextView
     // doesn't read SwiftUI's environment), matching the placeholder above it.
@@ -75,14 +77,16 @@ private final class SubmitTextView: NSTextView {
     var onSubmit: () -> Void = {}
     var onCancel: () -> Void = {}
     var onFocusChange: (Bool) -> Void = { _ in }
-    var onCycleTarget: (Int) -> Void = { _ in }
+    /// nil ⇒ ⌘+arrows fall through to normal caret navigation (Ask's question
+    /// field has no target to cycle, so line/doc-end shortcuts must keep working).
+    var onCycleTarget: ((Int) -> Void)?
 
     // ⌘+arrow cycles the target instead of moving the caret to line/document ends.
     // NB: arrow keys also carry .function/.numericPad, so we must check the four
     // real modifiers individually — not compare the whole mask to .command.
     override func keyDown(with event: NSEvent) {
         let m = event.modifierFlags
-        if let delta = targetCycleDelta(
+        if let onCycleTarget, let delta = targetCycleDelta(
             keyCode: Int(event.keyCode),
             command: m.contains(.command), option: m.contains(.option),
             control: m.contains(.control), shift: m.contains(.shift)) {

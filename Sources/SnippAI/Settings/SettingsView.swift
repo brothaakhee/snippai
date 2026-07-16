@@ -146,7 +146,7 @@ struct SettingsView: View {
             icon: "sparkle.magnifyingglass",
             title: "Ask",
             beta: true,
-            subtitle: "Press ⌥⇧A and select any text on screen — get a quick explanation without touching your session.",
+            subtitle: "Highlight text, press ⌥⇧A, then ask anything about it — by voice or keyboard — without touching your session. No selection? Drag a region instead.",
             footnote: AskController.claudeAvailable
                 ? "Answers come from a one-off Claude session (haiku, no tools) using your existing Claude Code sign-in."
                 : "Needs the Claude Code CLI (`claude`) installed and signed in.",
