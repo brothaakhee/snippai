@@ -145,7 +145,7 @@ struct AskView: View {
             }
             HStack {
                 if voice.phase == .recording {
-                    Label("Listening… Return to stop & review — typing switches to text",
+                    Label("Listening… Return to ask · mic button to stop & edit",
                           systemImage: "waveform")
                         .scaledFont(10).foregroundStyle(PanelStyle.accent)
                 } else {
@@ -182,11 +182,21 @@ struct AskView: View {
         Task { await voice.beginRecording() }
     }
 
-    /// Return: recording → stop & drop the transcript in for review; transcribing
-    /// → wait; otherwise submit (empty question = the canned explain).
+    /// Return: recording → stop, transcribe, and submit in one stroke (Ask is a
+    /// low-stakes one-off — no review step); transcribing → wait; otherwise submit
+    /// (empty question = the canned explain). The mic button still offers
+    /// stop-and-edit for anyone who wants to tweak before asking.
     private func handleSubmit() {
         switch voice.phase {
-        case .recording:    stopAndReview()
+        case .recording:
+            Task {
+                let spoken = await voice.finishAndTranscribe()
+                let merged = [question, spoken]
+                    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                    .joined(separator: " ")
+                ask.submit(question: merged.isEmpty ? nil : merged)
+            }
         case .transcribing: break
         default:
             voice.cancelRecording()
@@ -194,6 +204,7 @@ struct AskView: View {
         }
     }
 
+    /// Mic button path: stop and drop the transcript into the field for editing.
     private func stopAndReview() {
         Task {
             if let text = await voice.finishAndTranscribe() {
