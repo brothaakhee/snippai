@@ -104,24 +104,6 @@ final class AskEngineTests: XCTestCase {
         XCTAssertFalse(p.contains("conversation below"), "no dangling context framing")
     }
 
-    func testContextForSelectionAttachesOnlyWhenTheTextAppearsInTheTranscript() throws {
-        let jsonl = #"{"uuid":"1","type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Make it policy — it is your Caesar's-wife rule."}]}}"#
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ask-ctx-\(UUID().uuidString).jsonl")
-        try jsonl.data(using: .utf8)!.write(to: url)
-        defer { try? FileManager.default.removeItem(at: url) }
-
-        // Selection came from THAT session → context attaches.
-        let match = AskContext.contextIfRelevant(highlighted: "Caesar's-wife rule",
-                                                 transcriptPath: url.path, maxLength: 4000)
-        XCTAssertNotNil(match)
-        XCTAssertTrue(match!.contains("Make it policy"))
-
-        // Selection came from somewhere else (a browser) → no false context.
-        let unrelated = AskContext.contextIfRelevant(highlighted: "Kubernetes ingress",
-                                                     transcriptPath: url.path, maxLength: 4000)
-        XCTAssertNil(unrelated, "must not attach an irrelevant Claude transcript")
-    }
 
     func testWhitespaceOnlyQuestionFallsBackToCannedExplain() {
         let p = AskContext.prompt(question: "   \n  ", highlighted: "idempotency key", context: nil)

@@ -28,18 +28,6 @@ public enum AskContext {
         return text
     }
 
-    /// The transcript context, but ONLY when the highlighted text actually appears
-    /// in it — the last-used-session heuristic attaches this regardless of where the
-    /// selection came from, so without this guard a phrase highlighted in a browser
-    /// would be falsely framed as "from that Claude message". Returns nil when the
-    /// selection isn't found (or there's no transcript), so the prompt stays honest.
-    public static func contextIfRelevant(highlighted: String, transcriptPath: String?, maxLength: Int) -> String? {
-        guard let path = transcriptPath,
-              let text = lastAssistantText(transcriptPath: path, maxLength: maxLength) else { return nil }
-        let needle = highlighted.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !needle.isEmpty, text.localizedCaseInsensitiveContains(needle) else { return nil }
-        return text
-    }
 
     /// The one-shot prompt. Keep it boring and directive: brief answer, own
     /// knowledge only (belt-and-braces with the CLI's tool ban), then stop.

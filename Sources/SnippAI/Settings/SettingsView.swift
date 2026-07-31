@@ -9,7 +9,7 @@ struct SettingsView: View {
     @Bindable var license: LicenseStore
     @Bindable var launchAtLogin: LaunchAtLoginStore
     @Bindable var voice: VoiceController
-    @Bindable var ask: AskController
+    @Bindable var ask: AskSettings
     var onDone: () -> Void
 
     @Environment(\.openURL) private var openURL
@@ -147,7 +147,7 @@ struct SettingsView: View {
             title: "Ask",
             beta: true,
             subtitle: "Highlight text, press ⌥⇧A, then ask anything about it — by voice or keyboard — without touching your session. No selection? Drag a region instead.",
-            footnote: AskController.claudeAvailable
+            footnote: AskSettings.claudeAvailable
                 ? "Answers come from a one-off Claude session (haiku, no tools) using your existing Claude Code sign-in."
                 : "Needs the Claude Code CLI (`claude`) installed and signed in.",
             isOn: Binding(get: { ask.isEnabled }, set: { ask.setEnabled($0) }),

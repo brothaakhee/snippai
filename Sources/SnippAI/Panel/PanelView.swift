@@ -6,7 +6,6 @@ import SnippAIKit
 struct PanelView: View {
     @Bindable var model: AppModel
     let voice: VoiceController
-    let ask: AskController
     var onClose: () -> Void
     var onAddScreenshot: () -> Void = {}
     /// Called as the user drags the opacity slider, so the controller can fade the
@@ -19,14 +18,12 @@ struct PanelView: View {
 
     init(model: AppModel,
          voice: VoiceController,
-         ask: AskController,
          onClose: @escaping () -> Void,
          onAddScreenshot: @escaping () -> Void = {},
          initialOpacity: Double = 1.0,
          onOpacityChange: @escaping (Double) -> Void = { _ in }) {
         self._model = Bindable(wrappedValue: model)
         self.voice = voice
-        self.ask = ask
         self.onClose = onClose
         self.onAddScreenshot = onAddScreenshot
         self.onOpacityChange = onOpacityChange
@@ -48,17 +45,11 @@ struct PanelView: View {
                              onDismiss: { model.dismissUpdateBanner() })
                 Divider().opacity(0.5)
             }
-            // Ask takes over the panel while active — a side-quest view that never
-            // touches the session phases underneath it.
-            if ask.isActive {
-                AskView(ask: ask, voice: voice, model: model, onClose: onClose)
-            } else {
-                switch model.phase {
-                case .picking:
-                    SessionPickerView(model: model, onCancel: onClose)
-                case .composing:
-                    ComposeView(model: model, voice: voice)
-                }
+            switch model.phase {
+            case .picking:
+                SessionPickerView(model: model, onCancel: onClose)
+            case .composing:
+                ComposeView(model: model, voice: voice)
             }
         }
         // Fill the (resizable) window rather than a fixed size, so dragging the

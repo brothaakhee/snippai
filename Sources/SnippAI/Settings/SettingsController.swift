@@ -13,10 +13,10 @@ final class SettingsController: NSObject, NSWindowDelegate {
     private let license: LicenseStore
     private let launchAtLogin: LaunchAtLoginStore
     private let voice: VoiceController
-    private let ask: AskController
+    private let ask: AskSettings
 
     init(store: ShortcutStore, hooks: HookController, license: LicenseStore,
-         launchAtLogin: LaunchAtLoginStore, voice: VoiceController, ask: AskController) {
+         launchAtLogin: LaunchAtLoginStore, voice: VoiceController, ask: AskSettings) {
         self.store = store
         self.hooks = hooks
         self.license = license

@@ -43,6 +43,24 @@ final class CaptureController {
 
     struct CaptureOutcome { let url: URL; let globalRect: CGRect }
 
+    /// A non-interactive full-screen grab, in memory — the frozen backdrop for the
+    /// Ask overlay. Call BEFORE showing the overlay so we don't capture ourselves.
+    func captureFullScreen(_ screen: NSScreen) async throws -> CGImage {
+        guard let displayID = screen.displayID else { throw CaptureError.noMatchingDisplay }
+        let scDisplay = try await shareableDisplay(displayID)
+        let scale = screen.backingScaleFactor
+        let filter = SCContentFilter(display: scDisplay, excludingWindows: [])
+        let config = SCStreamConfiguration()
+        config.width = Int((screen.frame.width * scale).rounded())
+        config.height = Int((screen.frame.height * scale).rounded())
+        config.showsCursor = false
+        do {
+            return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+        } catch {
+            throw CaptureError.captureFailed(error.localizedDescription)
+        }
+    }
+
     /// Runs the full capture flow: crosshair → region → PNG on disk.
     /// Returns `nil` if the user cancels the selection.
     func captureRegion() async throws -> CaptureOutcome? {
@@ -63,16 +81,7 @@ final class CaptureController {
     }
 
     private func capture(_ selection: SelectionResult) async throws -> URL {
-        let content: SCShareableContent
-        do {
-            content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
-        } catch {
-            throw CaptureError.permissionDenied
-        }
-
-        guard let scDisplay = content.displays.first(where: { $0.displayID == selection.displayID }) else {
-            throw CaptureError.noMatchingDisplay
-        }
+        let scDisplay = try await shareableDisplay(selection.displayID)
 
         let screenFrame = selection.screenFrame
         let scale = selection.backingScale
@@ -107,6 +116,21 @@ final class CaptureController {
         }
 
         return try write(image)
+    }
+
+    /// Fetches the shareable content and resolves the `SCDisplay` for a display ID.
+    /// A failed content fetch means Screen Recording isn't granted.
+    private func shareableDisplay(_ displayID: CGDirectDisplayID) async throws -> SCDisplay {
+        let content: SCShareableContent
+        do {
+            content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+        } catch {
+            throw CaptureError.permissionDenied
+        }
+        guard let scDisplay = content.displays.first(where: { $0.displayID == displayID }) else {
+            throw CaptureError.noMatchingDisplay
+        }
+        return scDisplay
     }
 
     private func write(_ image: CGImage) throws -> URL {

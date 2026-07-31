@@ -13,7 +13,6 @@ final class PanelController: NSObject, NSWindowDelegate {
     private var panel: KeyablePanel?
     private let model: AppModel
     private let voice: VoiceController
-    private let ask: AskController
     private var onClose: () -> Void = {}
     /// Invoked by the panel's "+" button to capture and append another screenshot.
     var onAddScreenshot: () -> Void = {}
@@ -31,10 +30,9 @@ final class PanelController: NSObject, NSWindowDelegate {
     /// grabbable. (alphaValue doesn't affect hit-testing, so it stays clickable too.)
     private static let minOpacity = 0.2
 
-    init(model: AppModel, voice: VoiceController, ask: AskController) {
+    init(model: AppModel, voice: VoiceController) {
         self.model = model
         self.voice = voice
-        self.ask = ask
         super.init()
     }
 
@@ -102,7 +100,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         // listen would work only on the panel's very first open. Idempotent: it's
         // a no-op unless voice is idle-ready and we're composing. Never while Ask
         // has the panel — an explanation view must not hot-mic.
-        if model.phase == .composing, !ask.isActive {
+        if model.phase == .composing {
             Task { await voice.beginRecording() }
         }
     }
@@ -117,12 +115,11 @@ final class PanelController: NSObject, NSWindowDelegate {
         // any in-flight Ask one-shot (kill the subprocess, don't stream to nobody).
         model.teardown()
         voice.cancelRecording()
-        ask.cancel()
     }
 
     private func existingOrNewPanel() -> KeyablePanel {
         if let panel { return panel }
-        let hosting = NSHostingView(rootView: PanelView(model: model, voice: voice, ask: ask, onClose: { [weak self] in
+        let hosting = NSHostingView(rootView: PanelView(model: model, voice: voice, onClose: { [weak self] in
             self?.hide()
             self?.onClose()
         }, onAddScreenshot: { [weak self] in
