@@ -461,7 +461,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Ask flow (⌥⇧A: freeze the screen → point → ask in place)
 
     private func beginAsk() {
-        guard !isCapturing, askSettings.isEnabled, !annotationOverlay.isPresenting else { return }
+        // Toggle: a second press of the hotkey dismisses the overlay. This is the
+        // always-available escape hatch — a global Carbon hotkey fires regardless of
+        // which view holds focus, so it works even when Esc can't reach the overlay.
+        if annotationOverlay.isPresenting { annotationOverlay.dismiss(); return }
+        guard !isCapturing, askSettings.isEnabled else { return }
         guard AskSettings.claudeAvailable else {
             NSSound.beep()   // no `claude` CLI — nothing to answer with
             return

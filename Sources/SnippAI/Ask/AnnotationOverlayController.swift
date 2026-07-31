@@ -11,6 +11,10 @@ final class AnnotationOverlayController: NSObject {
     private let capture: CaptureController
     private let voice: VoiceController
     private(set) var session: AnnotationSession?
+    /// Local key monitor that guarantees Escape dismisses the overlay no matter
+    /// which subview (mic, text field) holds focus — SwiftUI's `.onExitCommand`
+    /// only fires for the first responder, so a focused text field would eat Esc.
+    private var keyMonitor: Any?
 
     /// True while the overlay is on screen (so the hotkey doesn't re-enter).
     var isPresenting: Bool { panel != nil }
@@ -74,6 +78,16 @@ final class AnnotationOverlayController: NSObject {
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
+        // Escape / ⌘. always dismisses — the monitor sees the keyDown before it
+        // reaches any focused text field, so the overlay can never trap the screen.
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            let isEscape = event.keyCode == 53
+            let isCmdPeriod = event.charactersIgnoringModifiers == "." && event.modifierFlags.contains(.command)
+            guard isEscape || isCmdPeriod else { return event }
+            self?.dismiss()
+            return nil   // swallow it
+        }
+
         // If the user already had text selected, skip straight to asking — anchor
         // the thread where the cursor was (that's what they were pointing at).
         let selection = await SelectionGrabber.grab()?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -93,6 +107,8 @@ final class AnnotationOverlayController: NSObject {
     }
 
     func dismiss() {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
         voice.cancelRecording()
         session?.clear()
         session = nil

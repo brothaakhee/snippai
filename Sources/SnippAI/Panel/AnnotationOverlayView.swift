@@ -135,7 +135,14 @@ struct AnnotationOverlayView: View {
                  ? "Select text, then ask — enable Screen Recording to point at anything"
                  : "Drag over anything to ask about it")
                 .scaledFont(12, weight: .medium)
-            Text("Esc to close").scaledFont(11).foregroundStyle(.secondary)
+            Button(action: onClose) {
+                Label("Esc to close", systemImage: "xmark")
+                    .labelStyle(.titleAndIcon)
+                    .scaledFont(11)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Close the Ask overlay")
         }
         .padding(.horizontal, 14).padding(.vertical, 9)
         .background(.ultraThinMaterial, in: Capsule())
