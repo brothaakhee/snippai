@@ -461,7 +461,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // app, that IS the quote — exact characters, no crosshair round-trip.
             if let selection = await SelectionGrabber.grab() {
                 askController.prepare(highlighted: selection,
-                                      transcriptPath: model.lastUsedSessionTranscriptPath)
+                                      transcriptPath: ActiveTranscript.mostRecent()?.path)
                 panelController.show(onClose: {})
                 return
             }
@@ -481,7 +481,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     return
                 }
                 askController.prepare(highlighted: highlighted,
-                                      transcriptPath: model.lastUsedSessionTranscriptPath)
+                                      transcriptPath: ActiveTranscript.mostRecent()?.path)
                 panelController.show(besideSelection: outcome.globalRect, onClose: {})
             } catch {
                 presentError(error)

@@ -77,7 +77,7 @@ final class AskController {
         streamTask = Task { [weak self] in
             // Transcripts grow to tens of MB — read/decode off the main actor.
             let context: String? = await Task.detached {
-                AskContext.contextIfRelevant(highlighted: highlighted, transcriptPath: transcriptPath, maxLength: 4000)
+                AskContext.contextIfRelevant(highlighted: highlighted, transcriptPath: transcriptPath, maxLength: 16000)
             }.value
             guard let self, self.generation == gen else { return }
 
