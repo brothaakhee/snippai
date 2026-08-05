@@ -49,7 +49,7 @@ struct PanelView: View {
             case .picking:
                 SessionPickerView(model: model, onCancel: onClose)
             case .composing:
-                ComposeView(model: model, voice: voice)
+                ComposeView(model: model, voice: voice, onSent: onClose)
             }
         }
         // Fill the (resizable) window rather than a fixed size, so dragging the
@@ -379,6 +379,8 @@ private struct SourceBadge: View {
 private struct ComposeView: View {
     @Bindable var model: AppModel
     @Bindable var voice: VoiceController
+    /// Called after a prompt is actually delivered, so the panel closes on submit.
+    var onSent: () -> Void = {}
     @State private var inputFocused = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Scale the input box + send button with Dynamic Type so larger text doesn't crowd.
@@ -667,7 +669,10 @@ private struct ComposeView: View {
 
     private func send() {
         guard canSend else { return }
-        Task { await model.send() }
+        // Submitting is a "fire and get out of the way" action — close the panel once
+        // the prompt has actually landed in the session (but stay open on a failure so
+        // the error is visible and the message isn't lost).
+        Task { if await model.send() { onSent() } }
     }
 }
 

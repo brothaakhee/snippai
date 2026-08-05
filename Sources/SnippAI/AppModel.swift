@@ -410,16 +410,19 @@ final class AppModel {
     }
 
     /// Composes the outgoing message (user text + screenshot paths) and submits it.
-    func send() async {
-        guard let sessionID = selectedSessionID else { return }
+    /// Returns whether the prompt was actually delivered — the caller closes the
+    /// panel only on a real send, never on a guard bail-out or a failure.
+    @discardableResult
+    func send() async -> Bool {
+        guard let sessionID = selectedSessionID else { return false }
         // Defense-in-depth: the UI disables send for mirror-only targets; never try to
         // inject into one (the adapter would just throw).
-        guard selectedSession?.supportsInject != false else { return }
+        guard selectedSession?.supportsInject != false else { return false }
         let composed = composeMessage(text: messageText, screenshots: screenshotURLs)
-        guard !composed.isEmpty else { return }
+        guard !composed.isEmpty else { return false }
         isSending = true
         defer { isSending = false }
-        guard await confirmTargetCanReceive(sessionID: sessionID) else { return }
+        guard await confirmTargetCanReceive(sessionID: sessionID) else { return false }
         do {
             // The adapter owns submission (iTerm appends a newline; Terminal's
             // `do script` auto-submits). We pass a single-line message so it lands
@@ -434,8 +437,10 @@ final class AppModel {
             // If the integration is enabled, the sent prompt fires UserPromptSubmit →
             // Working → Stop → Done on its own. If it's off, there's no badge to clear
             // and faking one would get stuck forever (no Stop event ever arrives).
+            return true
         } catch {
             connectionError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return false
         }
     }
 
