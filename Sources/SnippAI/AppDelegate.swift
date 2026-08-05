@@ -141,7 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task {
                 await annotationOverlay.present()
                 if let fragment = ProcessInfo.processInfo.environment["SNIPPAI_ASK_FRAGMENT"] {
-                    let annotation = annotationOverlay.session?.addAnnotation(
+                    let annotation = await annotationOverlay.session?.addAnnotation(
                         anchor: CGRect(x: 120, y: 180, width: 300, height: 22), fragment: fragment)
                     if let question = ProcessInfo.processInfo.environment["SNIPPAI_ASK_QUESTION"] {
                         voiceController.cancelRecording()

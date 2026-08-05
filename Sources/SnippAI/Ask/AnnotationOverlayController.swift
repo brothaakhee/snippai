@@ -30,16 +30,6 @@ final class AnnotationOverlayController: NSObject {
         guard panel == nil else { return }
         guard let screen = NSScreen.main else { return }
 
-        // Resolve the conversation this screen belongs to (most-recently-written
-        // transcript — works across terminal / desktop app / IDE). Independent of the
-        // capture, so kick it off first and let the two run concurrently — the overlay
-        // then appears after max(capture, transcript) rather than their sum.
-        async let fullResponse: String? = Task.detached {
-            ActiveTranscript.mostRecent().flatMap {
-                AskContext.lastAssistantText(transcriptPath: $0.path, maxLength: 16_000)
-            }
-        }.value
-
         // Grab the backdrop BEFORE showing anything, so we don't capture ourselves.
         // If Screen Recording isn't granted, fall back to a dark backdrop so the
         // overlay still appears (the selection/clipboard path still works) rather
@@ -53,8 +43,7 @@ final class AnnotationOverlayController: NSObject {
             captureFailed = true
         }
 
-        let session = AnnotationSession(
-            backdrop: backdrop, backdropSize: screen.frame.size, fullResponse: await fullResponse)
+        let session = AnnotationSession(backdrop: backdrop, backdropSize: screen.frame.size)
         self.session = session
 
         let root = AnnotationOverlayView(
@@ -96,7 +85,7 @@ final class AnnotationOverlayController: NSObject {
             let point = CGPoint(x: mouse.x - screen.frame.minX,
                                 y: screen.frame.maxY - mouse.y)   // → top-left view coords
             let anchor = CGRect(x: max(0, point.x - 120), y: point.y + 8, width: 240, height: 20)
-            session.addAnnotation(anchor: anchor, fragment: selection)
+            await session.addAnnotation(anchor: anchor, fragment: selection)
         } else if captureFailed {
             // No live backdrop to drag/OCR AND nothing pre-selected → the overlay
             // is a dead end. Don't strand the user: guide them to Screen Recording.

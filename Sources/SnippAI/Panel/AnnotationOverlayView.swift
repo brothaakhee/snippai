@@ -97,7 +97,7 @@ struct AnnotationOverlayView: View {
         guard !fragment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             NSSound.beep(); return   // nothing readable in that region
         }
-        session.addAnnotation(anchor: rect, fragment: fragment)
+        await session.addAnnotation(anchor: rect, fragment: fragment)
         // Recording starts via .onChange(of: annotations.count) — single owner.
     }
 

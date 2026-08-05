@@ -30,6 +30,43 @@ public enum SentenceMatcher {
         return best.sentence.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// How strongly `text` contains the on-screen `fragment` (0…1) — used to pick
+    /// WHICH transcript a selection came from. The response the user is looking at
+    /// literally contains the words they selected, so the transcript that scores
+    /// highest is the conversation to attach.
+    ///
+    /// Bigrams are useless here: a long message contains nearly every common bigram,
+    /// so short fragments saturate to ~1.0 against *any* large transcript. Instead:
+    /// an exact match after normalization (the selection/clipboard path is exact
+    /// text, no OCR) scores 1.0; otherwise order-aware character 4-grams, which are
+    /// specific enough that an unrelated transcript scores near zero while OCR noise
+    /// (a few mangled characters) only dents the score.
+    public static func score(forFragment fragment: String, in text: String) -> Double {
+        let needleStr = normalizedAlnum(fragment)
+        guard needleStr.count >= 6 else { return 0 }
+        let hayStr = normalizedAlnum(text)
+        if hayStr.contains(needleStr) { return 1.0 }
+        let needle = charNGrams(needleStr, n: 4)
+        guard !needle.isEmpty else { return 0 }
+        return Double(needle.intersection(charNGrams(hayStr, n: 4)).count) / Double(needle.count)
+    }
+
+    /// Lowercased, alphanumeric-only (spaces/punctuation dropped) so OCR spacing and
+    /// punctuation differences cost nothing.
+    private static func normalizedAlnum(_ s: String) -> String {
+        String(String.UnicodeScalarView(
+            s.lowercased().unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }))
+    }
+
+    /// Set of contiguous character n-grams of an already-normalized string.
+    private static func charNGrams(_ s: String, n: Int) -> Set<String> {
+        let chars = Array(s)
+        guard chars.count >= n else { return [] }
+        var grams = Set<String>()
+        for i in 0...(chars.count - n) { grams.insert(String(chars[i..<i+n])) }
+        return grams
+    }
+
     /// The clean sentence anchor for what the user pointed at, or — when no
     /// sentence matches confidently — the raw fragment itself (trimmed). Either
     /// way the caller has *something* to tell Claude "they're asking about this",
@@ -60,12 +97,7 @@ public enum SentenceMatcher {
     /// Normalized character bigrams: lowercased, letters/digits only (so
     /// punctuation and spacing differences don't cost anything).
     private static func bigrams(of s: String) -> Set<String> {
-        let cleaned = s.lowercased().unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }
-        let chars = Array(String(String.UnicodeScalarView(cleaned)))
-        guard chars.count >= 2 else { return [] }
-        var grams = Set<String>()
-        for i in 0..<(chars.count - 1) { grams.insert(String(chars[i...i+1])) }
-        return grams
+        charNGrams(normalizedAlnum(s), n: 2)
     }
 
     /// Fraction of the needle's bigrams present in the haystack (0…1).
