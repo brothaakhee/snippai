@@ -10,9 +10,12 @@ public enum LicenseConfig {
     // Lemon Squeezy product identity. A variant ID is globally unique in LS, so matching
     // on it alone locks activation to *this* product — a key minted by any other product
     // is rejected. `storeId` is optional defense-in-depth; 0 means "don't enforce".
+    // These are the *live* store/variant records. Lemon Squeezy keeps test-mode data in a
+    // parallel set of records with their own IDs, and the dashboard hands you whichever one
+    // matches the test-mode toggle — so re-copy these with test mode OFF, never with it on.
     public static let storeId = 413478
-    public static let variantId = 1828323
-    public static let checkoutURL = URL(string: "https://snippai.lemonsqueezy.com/checkout/buy/4697be93-21f7-48a3-bcbb-0f5a7b8732ed")!
+    public static let variantId = 1828338
+    public static let checkoutURL = URL(string: "https://snippai.lemonsqueezy.com/checkout/buy/4f50afb5-00e4-41d5-a728-d555cf2a6fcd")!
 
     /// Free trial length before the paywall engages.
     public static let trialDays = 7
