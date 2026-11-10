@@ -4,8 +4,12 @@ A native macOS app that collapses *"screenshot → cmd-tab to your terminal → 
 
 ![SnippAI demo — grab a screen region and fire it, with a message, straight into your running Claude Code session](marketing/demo.gif)
 
-> **Status: shipped.** v1.0.x is live at [snippai.dev](https://snippai.dev) — Developer ID signed, notarized DMG, 7-day free trial, then $8.99 once (Lemon Squeezy).
+> **Status: shipped.** v1.1.2 is the current release — [download it here](https://github.com/brothaakhee/snippai-releases/releases/latest) ([snippai.dev](https://snippai.dev)). Developer ID signed, notarized DMG, 7-day free trial, then $8.99 once (Lemon Squeezy).
 > Requires **macOS 14+** and **iTerm2 or Terminal.app** (Claude Desktop is supported in beta; Warp/Ghostty/kitty aren't supported yet).
+
+**Who it's for:** Mac developers who pair with Claude Code in a terminal and keep needing to show it something on screen — a broken layout, a stack trace in a browser, a design to match.
+
+**Built with:** Swift 6, AppKit + SwiftUI, ScreenCaptureKit for capture, SwiftProtobuf for iTerm2's API, AppleScript for Terminal.app, FluidAudio (on-device Parakeet ASR) for voice input, and Swift Package Manager. The site is static HTML served by Caddy.
 
 ---
 
@@ -58,3 +62,9 @@ Debug-only env hooks (`SNIPPAI_FAKE_ENTITLEMENT`, `SNIPPAI_AUTO_PANEL`, …) are
 | `docs/` | Launch runbook, hook-bridge spec, feasibility notes, desktop-inject handoff |
 | `scripts/` | `build_app.sh` (dev), `release.sh` (sign/notarize/DMG/appcast) |
 | `tools/ax_probe.swift`, `spike_iterm.py` | The original de-risking probes (kept for reference) |
+
+## Roadmap
+See [`ROADMAP.md`](ROADMAP.md).
+
+## License
+MIT — see [`LICENSE`](LICENSE). Third-party components and their licenses are listed in [`ACKNOWLEDGEMENTS.md`](ACKNOWLEDGEMENTS.md); note that `proto/api.proto` and the Swift generated from it describe iTerm2's API and come from iTerm2 (GPLv2+), not from this project.
